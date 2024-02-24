@@ -1,0 +1,18 @@
+[package]
+name = "sophross"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+egui = "0.26"
+egui_dock = "0.11"
+
+eframe = { version = "*", features = ["default", "__screenshot"] }
+
+egui_extras = { version = "*", features = ["default", "image"] }
+
+env_logger = { version = "0.10", default-features = false, features = ["auto-color", "humantime"] }
+sqlite = "0.33.0"
