@@ -12,7 +12,8 @@ egui_dock = "0.11"
 
 eframe = { version = "*", features = ["default", "__screenshot"] }
 
-egui_extras = { version = "*", features = ["default", "image"] }
+egui_extras = { version = "*", features = ["default", "image", "svg"] }
 
-env_logger = { version = "0.10", default-features = false, features = ["auto-color", "humantime"] }
-sqlite = "0.33.0"
+env_logger = { version = "0.11.2", default-features = false, features = ["auto-color", "humantime"] }
+#rusqlite = "0.31.0"
+rusqlite = { version = "0.31.0", features = ["bundled"] }
