@@ -1,10 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 mod ingredients;
+mod toggle_image;
 
 use ingredients::{Ingredient, Category, Unit};
+use toggle_image::toggle_image;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use eframe::{egui, NativeOptions};
 use eframe::epaint::textures::TextureFilter;
@@ -55,12 +57,21 @@ macro_rules! unit_slider {
 }
 
 const DATABASE_NAME: &str = "data.db";
+const ICON_NAMES: [&str; 2] = ["apple", "bread"];
+
+fn get_icon_image_source(id: &str) -> ImageSource {
+    match id {
+        "apple" => egui::include_image!("../icons/categories/apple.png"),
+        "bread" => egui::include_image!("../icons/categories/bread.png"),
+        _ => egui::include_image!("../icons/categories/placeholder.png")
+    }
+}
 
 fn main() -> eframe::Result<()> {
     std::env::set_var("RUST_BACKTRACE", "1");
     let options = NativeOptions {
         viewport: ViewportBuilder::default()
-            .with_inner_size(vec2(1024.0, 768.0))
+            .with_inner_size(vec2(800.0, 600.0))
             .with_min_inner_size(vec2(640.0, 480.0)),
         ..Default::default()
     };
@@ -89,7 +100,7 @@ struct MyApp {
 impl Default for MyApp {
     fn default() -> Self {
         let mut dock_state =
-            DockState::new(vec!["Ingredients View".to_owned(), "Style Editor".to_owned()]);
+            DockState::new(vec!["Ingredients View".to_owned(), "Categories View".to_owned(), "Style Editor".to_owned()]);
         dock_state.translations.tab_context_menu.eject_button = "Undock".to_owned();
         let [a, b] = dock_state.main_surface_mut().split_left(
             NodeIndex::root(),
@@ -119,26 +130,22 @@ impl Default for MyApp {
         let db_connection = Connection::open(DATABASE_NAME).unwrap();
 
         let categories_create_query = "
-            CREATE TABLE IF NOT EXISTS categories (category_id INTEGER PRIMARY KEY, name TEXT, icon_path TEXT);
+            CREATE TABLE IF NOT EXISTS categories (category_id INTEGER PRIMARY KEY, name TEXT, icon_name TEXT, icon_color TEXT);
         ";
         let categories_result = db_connection.execute(categories_create_query, ()).unwrap();
-
-        println!("categories_result: {}", categories_result);
-
+        
         if categories_result > 0 {
             let mut category_insert_statement = db_connection.prepare("
-                INSERT INTO categories (name, icon_path) VALUES (?1, ?2);
+                INSERT INTO categories (name, icon_name, icon_color) VALUES (?1, ?2, ?3);
             ").unwrap();
-            category_insert_statement.insert(params!["Crab", "../ferris.png"]).unwrap();
+            category_insert_statement.insert(params!["Fruit", "apple", "#80ff20"]).unwrap();
         }
 
         let ingredients_create_query = "
             CREATE TABLE IF NOT EXISTS ingredients (ingredient_id INTEGER PRIMARY KEY, name TEXT, amount INTEGER, unit INTEGER, categories TEXT);
         ";
         let ingredients_result = db_connection.execute(ingredients_create_query, ()).unwrap();
-
-        println!("ingredients_result: {}", ingredients_result);
-
+        
         if ingredients_result > 0 {
             let mut ingredient_insert_statement = db_connection.prepare("
                 INSERT INTO ingredients (name, amount, unit, categories) VALUES (?1, ?2, ?3, ?4);
@@ -172,6 +179,16 @@ impl Default for MyApp {
             new_ingredient_name_was_empty: false,
             new_ingredient_amount: 1,
             new_ingredient_unit: Unit::Grams,
+
+            categories_list: Vec::new(),
+            show_new_category_dialog: false,
+            update_categories: true,
+            selected_category: None,
+
+            new_category_name: String::from(""),
+            new_category_name_was_empty: false,
+            new_category_icon_name: String::from(""),
+            new_category_icon_color: Color32::WHITE,
         };
 
         Self {
@@ -249,6 +266,7 @@ struct MyContext {
     show_window_collapse: bool,
 
     db_connection: rusqlite::Connection,
+
     ingredients_list: Vec<Ingredient>,
     show_new_ingredient_dialog: bool,
     update_ingredients: bool,
@@ -258,6 +276,16 @@ struct MyContext {
     new_ingredient_name_was_empty: bool,
     new_ingredient_amount: u32,
     new_ingredient_unit: Unit,
+
+    categories_list: Vec<Category>,
+    show_new_category_dialog: bool,
+    update_categories: bool,
+    selected_category: Option<usize>,
+
+    new_category_name: String,
+    new_category_name_was_empty: bool,
+    new_category_icon_name: String,
+    new_category_icon_color: Color32,
 }
 
 impl MyContext {
@@ -379,10 +407,19 @@ impl MyContext {
                     row.set_selected(self.selected_ingredient.is_some_and(|idx| idx == row_index));
 
                     row.col(|ui| {
-                        for category in &ingredients_data[row_index].categories {
-                            let icon_path = &category.icon_path;
-                            ui.add(egui::Image::from_uri(format!("bytes://{}", icon_path)));
-                        }
+                        ui.horizontal(|ui| {
+                            for category in &ingredients_data[row_index].categories {
+                                let icon_name = &category.icon_name;
+
+                                ui.add(egui::Image::new(get_icon_image_source(icon_name).clone())
+                                    .tint(category.icon_color)
+                                    .texture_options(TextureOptions { 
+                                        magnification: TextureFilter::Nearest,
+                                        minification: TextureFilter::Nearest,
+                                        wrap_mode: TextureWrapMode::ClampToEdge,
+                                    } ));
+                            }
+                        });
                     });
                     row.col(|ui| {
                         ui.label(&ingredients_data[row_index].name);
@@ -396,6 +433,149 @@ impl MyContext {
 
                     if row.response().clicked() {
                         self.selected_ingredient = Some(row_index);
+                    }
+                });
+            });
+    }
+
+    fn new_category(&mut self, ui: &mut Ui) {
+        macro_rules! create_category {
+            () => {
+                if self.new_category_name.len() == 0 {
+                    self.new_category_name_was_empty = true;
+                }
+                else {
+                    let mut statement = self.db_connection.prepare(
+                        "INSERT INTO categories (name, icon_name, icon_color) VALUES (?1, ?2, ?3);"
+                    ).unwrap();
+                    let _ = statement.insert(params![
+                        self.new_category_name,
+                        self.new_category_icon_name,
+                        self.new_category_icon_color.to_hex()
+                    ]).unwrap();
+                    self.update_categories = true;
+                    drop(statement);
+                    cancel_category!();
+                }
+            };
+        }
+        macro_rules! clear_category {
+            () => {
+                self.new_category_name.clear();
+            };
+        }
+        macro_rules! cancel_category {
+            () => {
+                clear_category!();
+                self.show_new_category_dialog = false;
+            };
+        }
+        
+        ui.heading("Create new category");
+        ui.horizontal(|ui| {
+            ui.label("Name: ");
+            let result = ui.text_edit_singleline(&mut self.new_category_name);
+            if result.changed() && self.new_category_name.len() > 0 {
+                self.new_category_name_was_empty = false;
+            }
+            if self.new_category_name_was_empty {
+                ui.colored_label(Color32::from_rgb(192, 32, 16), "Name is required!");
+            }
+        });
+        ui.horizontal(|ui| {
+            ui.color_edit_button_srgba(&mut self.new_category_icon_color);
+            egui::Grid::new("category_icon_grid")
+                .spacing(vec2(-4.0, 0.0))
+                .show(ui, |ui| {
+                    for name in ICON_NAMES {
+                        ui.add(toggle_image::toggle_image(&mut true, &get_icon_image_source(name), self.new_category_icon_color));
+                        /*
+                        ui.add(egui::Image::new(get_icon_image_source(name))
+                            .tint(self.new_category_icon_color)
+                            .texture_options(TextureOptions { 
+                                magnification: TextureFilter::Nearest,
+                                minification: TextureFilter::Nearest,
+                                wrap_mode: TextureWrapMode::ClampToEdge,
+                            })
+                        );
+                        */
+                    }
+                });
+        });
+        ui.horizontal(|ui| {
+            if ui.button("Create").clicked() {
+                create_category!();
+            };
+            if ui.button("Clear").clicked() {
+                clear_category!();
+            };
+            if ui.button("Cancel").clicked() {
+               cancel_category!();
+            };
+        });
+    }
+
+    fn categories_view(&mut self, ui: &mut Ui, category_data: Vec<Category>) {
+        ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
+            ui.add_enabled_ui(!self.show_new_category_dialog, |ui| {
+                if ui.add(
+                    egui::Button::image_and_text(
+                        egui::Image::new(egui::include_image!("../icons/plus-square.png"))
+                            .tint(Color32::GRAY)
+                            .fit_to_exact_size(vec2(16.0, 16.0))
+                            .texture_options(TextureOptions { 
+                                magnification: TextureFilter::Nearest,
+                                minification: TextureFilter::Nearest,
+                                wrap_mode: TextureWrapMode::ClampToEdge,
+                            }),
+                        "New category"
+                    ).min_size(vec2(0.0, 24.0))
+                ).clicked() {
+                    self.show_new_category_dialog = true;
+                }
+            });
+            ui.label(format!("{} entries", self.ingredients_list.len()));
+        });
+        if self.show_new_category_dialog {
+            self.new_category(ui);
+        }
+        ui.separator();
+        TableBuilder::new(ui)
+            .sense(egui::Sense::click())
+            .striped(true)
+            .cell_layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight)
+                .with_main_align(egui::Align::LEFT)
+            )
+            .columns(Column::remainder().resizable(true), 2)
+            .header(20.0, |mut header| {
+                header.col(|ui| {
+                    ui.heading("Icon");
+                });
+                header.col(|ui| {
+                    ui.heading("Name");
+                });
+            })
+            .body(|body| {
+                body.rows(30.0, category_data.len(), |mut row| {
+                    let row_index = row.index();
+
+                    row.set_selected(self.selected_category.is_some_and(|idx| idx == row_index));
+
+                    row.col(|ui| {
+                        ui.add(egui::Image::new(get_icon_image_source(&category_data[row_index].icon_name).clone())
+                            .tint(category_data[row_index].icon_color)
+                            .texture_options(TextureOptions { 
+                                magnification: TextureFilter::Nearest,
+                                minification: TextureFilter::Nearest,
+                                wrap_mode: TextureWrapMode::ClampToEdge,
+                            }));
+                    });
+                    row.col(|ui| {
+                        ui.label(&category_data[row_index].name);
+                    });
+
+                    if row.response().clicked() {
+                        self.selected_category = Some(row_index);
                     }
                 });
             });
@@ -786,11 +966,12 @@ impl TabViewer for MyContext {
                         let mut statement = self.db_connection.prepare("SELECT name, amount, unit, categories FROM ingredients").unwrap();
                         let ingredients_iter = statement.query_map([], |row| {
                             let categories: Vec<Category> = {
-                                let mut statement2 = self.db_connection.prepare("SELECT name, icon_path FROM categories WHERE category_id IN (1)").unwrap();
+                                let mut statement2 = self.db_connection.prepare("SELECT name, icon_name, icon_color FROM categories WHERE category_id IN (1)").unwrap();
                                 let categories_iter = statement2.query_map([], |row2| {
                                     Ok(Category {
                                         name: row2.get(0)?,
-                                        icon_path: row2.get(1)?
+                                        icon_name: row2.get(1)?,
+                                        icon_color: Color32::from_hex(&row2.get::<usize, String>(2).unwrap()).unwrap(),
                                     })
                                 }).unwrap();
 
@@ -818,6 +999,33 @@ impl TabViewer for MyContext {
                     };
                     self.ingredients_list = ingredient_data.clone();
                     self.ingredients_view(ui, ingredient_data)
+                }
+            },
+            "Categories View" => {
+                if !self.update_categories {
+                    self.categories_view(ui, self.categories_list.clone())
+                }
+                else {
+                    self.update_categories = false;
+                    let categories_data: Vec<Category> = {
+                        let mut statement = self.db_connection.prepare("SELECT name, icon_name, icon_color FROM categories").unwrap();
+                        let categories_iter = statement.query_map([], |row| {
+                            Ok(Category {
+                                name: row.get(0)?,
+                                icon_name: row.get(1)?,
+                                icon_color: Color32::from_hex(&row.get::<usize, String>(2).expect("Could not parse hex value into color!")).unwrap(),
+                            })
+                        }).unwrap();
+
+                        let mut data: Vec<Category> = Vec::new();
+                        for category in categories_iter {
+                            data.push(category.unwrap());
+                        }
+
+                        data
+                    };
+                    self.categories_list = categories_data.clone();
+                    self.categories_view(ui, categories_data)
                 }
             },
             _ => {

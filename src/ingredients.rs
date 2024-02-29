@@ -40,7 +40,8 @@ impl std::fmt::Display for Unit {
 #[derive(Clone)]
 pub struct Category {
     pub name: String,
-    pub icon_path: String
+    pub icon_name: String,
+    pub icon_color: egui::Color32,
 }
 
 #[derive(Clone)]
