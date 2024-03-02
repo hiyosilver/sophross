@@ -3,14 +3,14 @@
 mod ingredients;
 mod toggle_image;
 
-use ingredients::{Ingredient, Category, Unit};
+use ingredients::*;
 use toggle_image::toggle_image;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashSet};
 
 use eframe::{egui, NativeOptions};
 use eframe::epaint::textures::TextureFilter;
-use egui::{color_picker::{color_edit_button_srgba, Alpha}, vec2, CentralPanel, ComboBox, Frame, Rounding, Slider, TopBottomPanel, Ui, ViewportBuilder, WidgetText, Style as BaseStyle, Visuals, Color32, Stroke, SizeHint, TextureOptions, ImageSource, TextureWrapMode};
+use egui::{color_picker::{color_edit_button_srgba, Alpha}, vec2, CentralPanel, ComboBox, Frame, Rounding, Slider, TopBottomPanel, Ui, ViewportBuilder, WidgetText, Style as BaseStyle, Visuals, Color32, Stroke, SizeHint, TextureOptions, ImageSource, TextureWrapMode, CursorIcon};
 
 use egui_dock::{
     AllowedSplits, DockArea, DockState, NodeIndex, OverlayType, Style, SurfaceIndex,
@@ -56,26 +56,356 @@ macro_rules! unit_slider {
     };
 }
 
-const DATABASE_NAME: &str = "data.db";
-const ICON_NAMES: [&str; 2] = ["apple", "bread"];
+const ICON_NAMES: [&str; 6] = ["apple", "bean", "bread", "candy", "drink", "drop"];
 
 fn get_icon_image_source(id: &str) -> ImageSource {
     match id {
         "apple" => egui::include_image!("../icons/categories/apple.png"),
+        "bean" => egui::include_image!("../icons/categories/bean.png"),
         "bread" => egui::include_image!("../icons/categories/bread.png"),
+        "candy" => egui::include_image!("../icons/categories/candy.png"),
+        "drink" => egui::include_image!("../icons/categories/drink.png"),
+        "drop" => egui::include_image!("../icons/categories/drop.png"),
         _ => egui::include_image!("../icons/categories/placeholder.png")
     }
+}
+
+fn setup_database() -> Connection {
+    let database_name: &str = "data.db";
+    let db_connection = Connection::open(database_name).unwrap();
+
+    db_connection.execute("PRAGMA foreign_keys = ON", []).unwrap();
+
+    let categories_create_query = "
+        CREATE TABLE IF NOT EXISTS categories (
+            category_id INTEGER PRIMARY KEY,
+            name TEXT,
+            icon_name TEXT,
+            icon_color TEXT
+        );
+    ";
+    db_connection.execute(categories_create_query, ()).unwrap();
+
+    let protein_sets_create_query = "
+        CREATE TABLE IF NOT EXISTS protein_sets (
+            protein_set_id INTEGER PRIMARY KEY,
+        --essentials
+            histidine REAL,
+            isoleucine REAL,
+            leucine REAL,
+            lysine REAL,
+            methionine REAL,
+            phenylalanine REAL,
+            threonine REAL,
+            tryptophan REAL,
+            valine REAL,
+        --non-essentials
+            alanine REAL,
+            arginine REAL,
+            asparagine REAL,
+            aspartic_acid REAL,
+            cysteine REAL,
+            glutamic_acid REAL,
+            glutamine REAL,
+            glycine REAL,
+            proline REAL,
+            serine REAL,
+            tyrosine REAL
+        );
+    ";
+    db_connection.execute(protein_sets_create_query, ()).unwrap();
+
+    let fat_sets_create_query = "
+        CREATE TABLE IF NOT EXISTS fat_sets (
+            fat_set_id INTEGER PRIMARY KEY,
+            saturated REAL,
+            monounsaturated REAL,
+            polyunsaturated REAL
+        );
+    ";
+    db_connection.execute(fat_sets_create_query, ()).unwrap();
+
+    let carbohydrate_sets_create_query = "
+        CREATE TABLE IF NOT EXISTS carbohydrate_sets (
+            carbohydrate_set_id INTEGER PRIMARY KEY,
+            starch REAL,
+            fiber REAL,
+            sugars REAL,
+            sugar_alcohols REAL
+        );
+    ";
+    db_connection.execute(carbohydrate_sets_create_query, ()).unwrap();
+
+    let vitamin_sets_create_query = "
+        CREATE TABLE IF NOT EXISTS vitamin_sets (
+            vitamin_set_id INTEGER PRIMARY KEY,
+            vitamin_a REAL,
+            vitamin_b1 REAL,
+            vitamin_b2 REAL,
+            vitamin_b3 REAL,
+            vitamin_b5 REAL,
+            vitamin_b6 REAL,
+            vitamin_b9 REAL,
+            vitamin_b12 REAL,
+            vitamin_c REAL,
+            vitamin_d REAL,
+            vitamin_e REAL,
+            vitamin_k REAL,
+            betaine REAL,
+            choline REAL
+        );
+    ";
+    db_connection.execute(vitamin_sets_create_query, ()).unwrap();
+
+    let mineral_sets_create_query = "
+        CREATE TABLE IF NOT EXISTS mineral_sets (
+            mineral_set_id INTEGER PRIMARY KEY,
+            calcium REAL,
+            copper REAL,
+            iron REAL,
+            magnesium REAL,
+            manganese REAL,
+            phosphorus REAL,
+            potassium REAL,
+            selenium REAL,
+            sodium REAL,
+            zinc REAL
+        );
+    ";
+    db_connection.execute(mineral_sets_create_query, ()).unwrap();
+
+    let nutrition_sets_create_query = "
+        CREATE TABLE IF NOT EXISTS nutrition_sets (
+            nutrition_set_id INTEGER PRIMARY KEY,
+            protein_set INTEGER,
+            fat_set INTEGER,
+            carbohydrate_set INTEGER,
+            vitamin_set INTEGER,
+            mineral_set INTEGER,
+            FOREIGN KEY(protein_set) REFERENCES protein_sets(protein_set_id) ON DELETE CASCADE,
+            FOREIGN KEY(fat_set) REFERENCES fat_sets(fat_set_id) ON DELETE CASCADE,
+            FOREIGN KEY(carbohydrate_set) REFERENCES carbohydrate_sets(carbohydrate_set_id) ON DELETE CASCADE,
+            FOREIGN KEY(vitamin_set) REFERENCES vitamin_sets(vitamin_set_id) ON DELETE CASCADE,
+            FOREIGN KEY(mineral_set) REFERENCES mineral_sets(mineral_set_id) ON DELETE CASCADE
+        );
+    ";
+    db_connection.execute(nutrition_sets_create_query, ()).unwrap();
+
+    let nutritional_info_create_query = "
+        CREATE TABLE IF NOT EXISTS nutritional_info (
+            info_id INTEGER PRIMARY KEY,
+            default_amount INTEGER,
+            default_unit INTEGER,
+            nutrition_set INTEGER,
+            FOREIGN KEY(nutrition_set) REFERENCES nutrition_sets(nutrition_set_id) ON DELETE CASCADE
+        );
+    ";
+    db_connection.execute(nutritional_info_create_query, ()).unwrap();
+
+    let ingredients_create_query = "
+        CREATE TABLE IF NOT EXISTS ingredients (
+            ingredient_id INTEGER PRIMARY KEY,
+            name TEXT,
+            categories TEXT,
+            nutrition INTEGER,
+            FOREIGN KEY(nutrition) REFERENCES nutritional_info(info_id) ON DELETE CASCADE
+        );
+    ";
+    db_connection.execute(ingredients_create_query, ()).unwrap();
+
+    db_connection
+}
+
+fn get_ingredient_select_query() -> &'static str {
+    "
+    SELECT
+        ingredient_id, name, categories,
+        default_amount, default_unit,
+        --essentials
+        histidine, isoleucine, leucine, lysine, methionine, phenylalanine,
+        threonine, tryptophan, valine,
+        --non-essentials
+        alanine, arginine, asparagine, aspartic_acid, cysteine, glutamic_acid, glutamine,
+        glycine, proline, serine, tyrosine,
+        --fats
+        saturated, monounsaturated, polyunsaturated,
+        --carbohydrates
+        starch, fiber, sugars, sugar_alcohols,
+        --vitamins
+        vitamin_a, vitamin_b1, vitamin_b2, vitamin_b3, vitamin_b5, vitamin_b6, vitamin_b9,
+        vitamin_b12, vitamin_c, vitamin_d, vitamin_e, vitamin_k, betaine, choline,
+        --minerals
+        calcium, copper, iron, magnesium, manganese,
+        phosphorus, potassium, selenium, sodium, zinc
+    FROM ingredients ing
+    INNER JOIN nutritional_info ni ON ing.nutrition = ni.info_id
+    INNER JOIN nutrition_sets ns ON ni.nutrition_set = ns.nutrition_set_id
+    INNER JOIN protein_sets ps ON ns.protein_set = ps.protein_set_id
+    INNER JOIN fat_sets fs ON ns.fat_set = fs.fat_set_id
+    INNER JOIN carbohydrate_sets cs ON ns.carbohydrate_set = cs.carbohydrate_set_id
+    INNER JOIN vitamin_sets vs ON ns.vitamin_set = vs.vitamin_set_id
+    INNER JOIN mineral_sets ms ON ns.mineral_set = ms.mineral_set_id;
+    "
+}
+
+fn get_ingredient_insert_query(ingredient: Ingredient) -> String {
+    format!(
+        "
+        BEGIN TRANSACTION;
+
+        --PRAGMA temp_store = 2;
+
+        --errors without this for some godforsaken reason
+
+        CREATE TEMP TABLE IF NOT EXISTS _variables(var_name TEXT, value INTEGER);
+
+        INSERT INTO protein_sets (
+            --essentials
+            histidine, isoleucine, leucine, lysine, methionine, phenylalanine,
+            threonine, tryptophan, valine,
+            --non-essentials
+            alanine, arginine, asparagine, aspartic_acid, cysteine, glutamic_acid, glutamine,
+            glycine, proline, serine, tyrosine
+        )
+        VALUES ({:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1});
+
+        INSERT INTO _variables (var_name, value) VALUES ('protein_set_id', last_insert_rowid());
+
+        INSERT INTO fat_sets (
+            saturated, monounsaturated, polyunsaturated
+        )
+        VALUES ({:.1}, {:.1}, {:.1});
+
+        INSERT INTO _variables (var_name, value) VALUES ('fat_set_id', last_insert_rowid());
+
+        INSERT INTO carbohydrate_sets (
+            starch, fiber, sugars, sugar_alcohols
+        )
+        VALUES ({:.1}, {:.1}, {:.1}, {:.1});
+
+        INSERT INTO _variables (var_name, value) VALUES ('carbohydrate_set_id', last_insert_rowid());
+
+        INSERT INTO vitamin_sets (
+            vitamin_a, vitamin_b1, vitamin_b2, vitamin_b3, vitamin_b5, vitamin_b6, vitamin_b9,
+            vitamin_b12, vitamin_c, vitamin_d, vitamin_e, vitamin_k, betaine, choline
+        )
+        VALUES ({:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1});
+
+        INSERT INTO _variables (var_name, value) VALUES ('vitamin_set_id', last_insert_rowid());
+
+        INSERT INTO mineral_sets (
+            calcium, copper, iron, magnesium, manganese,
+            phosphorus, potassium, selenium, sodium, zinc
+        )
+        VALUES ({:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1});
+
+        INSERT INTO _variables (var_name, value) VALUES ('mineral_set_id', last_insert_rowid());
+
+        INSERT INTO nutrition_sets (
+            protein_set, fat_set, carbohydrate_set, vitamin_set, mineral_set
+        )
+        VALUES (
+            (SELECT value FROM _variables WHERE var_name = 'protein_set_id' LIMIT 1),
+            (SELECT value FROM _variables WHERE var_name = 'fat_set_id' LIMIT 1),
+            (SELECT value FROM _variables WHERE var_name = 'carbohydrate_set_id' LIMIT 1),
+            (SELECT value FROM _variables WHERE var_name = 'vitamin_set_id' LIMIT 1),
+            (SELECT value FROM _variables WHERE var_name = 'mineral_set_id' LIMIT 1));
+
+        INSERT INTO _variables (var_name, value) VALUES ('nutrition_set_id', last_insert_rowid());
+
+        INSERT INTO nutritional_info (
+            default_amount, default_unit, nutrition_set
+        )
+        VALUES ({}, {}, (SELECT value FROM _variables WHERE var_name = 'nutrition_set_id' LIMIT 1));
+
+        INSERT INTO _variables (var_name, value) VALUES ('info_id', last_insert_rowid());
+
+        INSERT INTO ingredients (
+            name, categories, nutrition
+        )
+        VALUES ('{}', '{}', (SELECT value FROM _variables WHERE var_name = 'info_id' LIMIT 1));
+
+        DROP TABLE IF EXISTS _variables;
+
+        COMMIT;
+        ",
+        ingredient.nutritional_info.macronutrients.proteins.essential_amino_acids.histidine,
+        ingredient.nutritional_info.macronutrients.proteins.essential_amino_acids.isoleucine,
+        ingredient.nutritional_info.macronutrients.proteins.essential_amino_acids.leucine,
+        ingredient.nutritional_info.macronutrients.proteins.essential_amino_acids.lysine,
+        ingredient.nutritional_info.macronutrients.proteins.essential_amino_acids.methionine,
+        ingredient.nutritional_info.macronutrients.proteins.essential_amino_acids.phenylalanine,
+        ingredient.nutritional_info.macronutrients.proteins.essential_amino_acids.threonine,
+        ingredient.nutritional_info.macronutrients.proteins.essential_amino_acids.tryptophan,
+        ingredient.nutritional_info.macronutrients.proteins.essential_amino_acids.valine,
+        ingredient.nutritional_info.macronutrients.proteins.non_essential_amino_acids.alanine,
+        ingredient.nutritional_info.macronutrients.proteins.non_essential_amino_acids.arginine,
+        ingredient.nutritional_info.macronutrients.proteins.non_essential_amino_acids.asparagine,
+        ingredient.nutritional_info.macronutrients.proteins.non_essential_amino_acids.aspartic_acid,
+        ingredient.nutritional_info.macronutrients.proteins.non_essential_amino_acids.cysteine,
+        ingredient.nutritional_info.macronutrients.proteins.non_essential_amino_acids.glutamic_acid,
+        ingredient.nutritional_info.macronutrients.proteins.non_essential_amino_acids.glutamine,
+        ingredient.nutritional_info.macronutrients.proteins.non_essential_amino_acids.glycine,
+        ingredient.nutritional_info.macronutrients.proteins.non_essential_amino_acids.proline,
+        ingredient.nutritional_info.macronutrients.proteins.non_essential_amino_acids.serine,
+        ingredient.nutritional_info.macronutrients.proteins.non_essential_amino_acids.tyrosine,
+        ingredient.nutritional_info.macronutrients.fats.saturated,
+        ingredient.nutritional_info.macronutrients.fats.monounsaturated,
+        ingredient.nutritional_info.macronutrients.fats.polyunsaturated,
+        ingredient.nutritional_info.macronutrients.carbohydrates.starch,
+        ingredient.nutritional_info.macronutrients.carbohydrates.fiber,
+        ingredient.nutritional_info.macronutrients.carbohydrates.sugars,
+        ingredient.nutritional_info.macronutrients.carbohydrates.sugar_alcohols,
+        ingredient.nutritional_info.micronutrients.vitamins.vitamin_a,
+        ingredient.nutritional_info.micronutrients.vitamins.vitamin_b1,
+        ingredient.nutritional_info.micronutrients.vitamins.vitamin_b2,
+        ingredient.nutritional_info.micronutrients.vitamins.vitamin_b3,
+        ingredient.nutritional_info.micronutrients.vitamins.vitamin_b5,
+        ingredient.nutritional_info.micronutrients.vitamins.vitamin_b6,
+        ingredient.nutritional_info.micronutrients.vitamins.vitamin_b9,
+        ingredient.nutritional_info.micronutrients.vitamins.vitamin_b12,
+        ingredient.nutritional_info.micronutrients.vitamins.vitamin_c,
+        ingredient.nutritional_info.micronutrients.vitamins.vitamin_d,
+        ingredient.nutritional_info.micronutrients.vitamins.vitamin_e,
+        ingredient.nutritional_info.micronutrients.vitamins.vitamin_k,
+        ingredient.nutritional_info.micronutrients.vitamins.betaine,
+        ingredient.nutritional_info.micronutrients.vitamins.choline,
+        ingredient.nutritional_info.micronutrients.minerals.calcium,
+        ingredient.nutritional_info.micronutrients.minerals.copper,
+        ingredient.nutritional_info.micronutrients.minerals.iron,
+        ingredient.nutritional_info.micronutrients.minerals.magnesium,
+        ingredient.nutritional_info.micronutrients.minerals.manganese,
+        ingredient.nutritional_info.micronutrients.minerals.phosphorus,
+        ingredient.nutritional_info.micronutrients.minerals.potassium,
+        ingredient.nutritional_info.micronutrients.minerals.selenium,
+        ingredient.nutritional_info.micronutrients.minerals.sodium,
+        ingredient.nutritional_info.micronutrients.minerals.zinc,
+        ingredient.nutritional_info.default_amount,
+        ingredient.nutritional_info.default_unit as u8,
+        ingredient.name,
+        ingredient.categories.iter().map(|n| n.id.to_string()).collect::<Vec<String>>().join(",")
+    )
+}
+
+fn get_ingredient_delete_query(ingredient: &Ingredient) -> String {
+    format!(
+        "
+        DELETE FROM ingredients
+        WHERE ingredient_id = {}
+        ",
+        ingredient.id
+    )
 }
 
 fn main() -> eframe::Result<()> {
     std::env::set_var("RUST_BACKTRACE", "1");
     let options = NativeOptions {
         viewport: ViewportBuilder::default()
-            .with_inner_size(vec2(800.0, 600.0))
+            .with_inner_size(vec2(1200.0, 800.0))
             .with_min_inner_size(vec2(640.0, 480.0)),
         ..Default::default()
     };
-    
+
     eframe::run_native(
         "SophrOSS",
         options,
@@ -90,8 +420,6 @@ fn main() -> eframe::Result<()> {
     )
 }
 
-
-
 struct MyApp {
     context: MyContext,
     tree: DockState<String>,
@@ -102,15 +430,15 @@ impl Default for MyApp {
         let mut dock_state =
             DockState::new(vec!["Ingredients View".to_owned(), "Categories View".to_owned(), "Style Editor".to_owned()]);
         dock_state.translations.tab_context_menu.eject_button = "Undock".to_owned();
-        let [a, b] = dock_state.main_surface_mut().split_left(
-            NodeIndex::root(),
-            0.3,
-            vec!["Inspector".to_owned()],
+        let [a, b] =
+            dock_state
+                .main_surface_mut()
+                .split_left(NodeIndex::root(), 0.3, vec!["Inspector".to_owned()],
         );
-        let [_, _] = dock_state.main_surface_mut().split_below(
-            a,
-            0.7,
-            vec!["File Browser".to_owned(), "Asset Manager".to_owned()],
+        let [_, _] =
+            dock_state
+                .main_surface_mut()
+                .split_below(a,2.0/3.0, vec!["Details".to_owned()],
         );
         let [_, _] =
             dock_state
@@ -127,35 +455,7 @@ impl Default for MyApp {
             }
         }
 
-        let db_connection = Connection::open(DATABASE_NAME).unwrap();
-
-        let categories_create_query = "
-            CREATE TABLE IF NOT EXISTS categories (category_id INTEGER PRIMARY KEY, name TEXT, icon_name TEXT, icon_color TEXT);
-        ";
-        let categories_result = db_connection.execute(categories_create_query, ()).unwrap();
-        
-        if categories_result > 0 {
-            let mut category_insert_statement = db_connection.prepare("
-                INSERT INTO categories (name, icon_name, icon_color) VALUES (?1, ?2, ?3);
-            ").unwrap();
-            category_insert_statement.insert(params!["Fruit", "apple", "#80ff20"]).unwrap();
-        }
-
-        let ingredients_create_query = "
-            CREATE TABLE IF NOT EXISTS ingredients (ingredient_id INTEGER PRIMARY KEY, name TEXT, amount INTEGER, unit INTEGER, categories TEXT);
-        ";
-        let ingredients_result = db_connection.execute(ingredients_create_query, ()).unwrap();
-        
-        if ingredients_result > 0 {
-            let mut ingredient_insert_statement = db_connection.prepare("
-                INSERT INTO ingredients (name, amount, unit, categories) VALUES (?1, ?2, ?3, ?4);
-            ").unwrap();
-            ingredient_insert_statement.insert(params!["Rice, brown",     100,    0, "1"]).unwrap();
-            ingredient_insert_statement.insert(params!["Tofu",            100,    0, "1"]).unwrap();
-            ingredient_insert_statement.insert(params!["Soy sauce",       1,      1, "1"]).unwrap();
-            ingredient_insert_statement.insert(params!["Olive oil",       1,      2, "1"]).unwrap();
-        }
-
+        let db_connection = setup_database();
 
         let context = MyContext {
             style: None,
@@ -179,6 +479,8 @@ impl Default for MyApp {
             new_ingredient_name_was_empty: false,
             new_ingredient_amount: 1,
             new_ingredient_unit: Unit::Grams,
+            new_ingredient_selected_categories: Vec::new(),
+            new_ingredient_nutritional_info: None,
 
             categories_list: Vec::new(),
             show_new_category_dialog: false,
@@ -189,6 +491,8 @@ impl Default for MyApp {
             new_category_name_was_empty: false,
             new_category_icon_name: String::from(""),
             new_category_icon_color: Color32::WHITE,
+            new_category_selected_icon: None,
+            new_category_selected_icon_was_invalid: false,
         };
 
         Self {
@@ -276,6 +580,8 @@ struct MyContext {
     new_ingredient_name_was_empty: bool,
     new_ingredient_amount: u32,
     new_ingredient_unit: Unit,
+    new_ingredient_selected_categories: Vec<usize>,
+    new_ingredient_nutritional_info: Option<NutritionalInfo>,
 
     categories_list: Vec<Category>,
     show_new_category_dialog: bool,
@@ -286,6 +592,8 @@ struct MyContext {
     new_category_name_was_empty: bool,
     new_category_icon_name: String,
     new_category_icon_color: Color32,
+    new_category_selected_icon: Option<usize>,
+    new_category_selected_icon_was_invalid: bool,
 }
 
 impl MyContext {
@@ -296,16 +604,18 @@ impl MyContext {
                     self.new_ingredient_name_was_empty = true;
                 }
                 else {
-                    let mut statement = self.db_connection.prepare(
-                        "INSERT INTO ingredients (name, amount, unit, categories) VALUES (?1, ?2, ?3, 1);"
-                    ).unwrap();
-                    let _ = statement.insert(params![
-                        self.new_ingredient_name,
-                        self.new_ingredient_amount,
-                        self.new_ingredient_unit
-                    ]).unwrap();
+                    self.new_ingredient_nutritional_info.as_mut().unwrap().default_amount = self.new_ingredient_amount;
+                    self.new_ingredient_nutritional_info.as_mut().unwrap().default_unit = self.new_ingredient_unit;
+                    let _ = self.db_connection.execute_batch(&get_ingredient_insert_query(
+                        Ingredient {
+                            id: 0,
+                            name: self.new_ingredient_name.clone(),
+                            categories: self.new_ingredient_selected_categories.iter().map(|n| self.categories_list[*n].clone()).collect(),
+                            nutritional_info: self.new_ingredient_nutritional_info.clone().unwrap()
+                        }
+                    ));
+
                     self.update_ingredients = true;
-                    drop(statement);
                     cancel!();
                 }
             };
@@ -313,7 +623,9 @@ impl MyContext {
         macro_rules! clear {
             () => {
                 self.new_ingredient_name.clear();
-                self.new_ingredient_amount = 0;
+                self.new_ingredient_name_was_empty = false;
+                self.new_ingredient_amount = 1;
+                self.new_ingredient_selected_categories.clear();
             };
         }
         macro_rules! cancel {
@@ -332,7 +644,9 @@ impl MyContext {
                 self.new_ingredient_name_was_empty = false;
             }
             if self.new_ingredient_name_was_empty {
-                ui.colored_label(Color32::from_rgb(192, 32, 16), "Name is required!");
+                ui.colored_label(
+                    Color32::from_rgb(192, 32, 16),
+                    egui::RichText::new("Name is required!").strong());
             }
         });
         ui.horizontal(|ui| {
@@ -347,6 +661,30 @@ impl MyContext {
                 })
         });
         ui.horizontal(|ui| {
+            egui::Grid::new("category_icon_grid")
+                .spacing(vec2(-4.0, 0.0))
+                .show(ui, |ui| {
+                    for idx in 0..self.categories_list.len() {
+                        let category = &self.categories_list[idx];
+                        let category_selected = self.new_ingredient_selected_categories.contains(&idx);
+                        if ui.add(toggle_image::toggle_image(category_selected, true, &get_icon_image_source(&category.icon_name), category.icon_color, vec2(16.0, 16.0))).changed() {
+                            if category_selected {
+                                let index = self.new_ingredient_selected_categories.iter().position(|x| *x == idx).unwrap();
+                                self.new_ingredient_selected_categories.remove(index);
+                            }
+                            else {
+                                self.new_ingredient_selected_categories.push(idx);
+                            }
+                        }
+                    }
+                });
+            if self.new_ingredient_selected_categories.len() == 0 {
+                ui.colored_label(
+                    Color32::from_rgb(192, 192, 16),
+                    egui::RichText::new("Consider adding a category."));
+            }
+        });
+        ui.horizontal(|ui| {
             if ui.button("Create").clicked() {
                 create!();
             };
@@ -359,21 +697,100 @@ impl MyContext {
         });
     }
 
-    fn ingredients_view(&mut self, ui: &mut Ui, ingredients_data: Vec<Ingredient>) {
+    fn ingredients_view(&mut self, ui: &mut Ui) {
         ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
             ui.add_enabled_ui(!self.show_new_ingredient_dialog, |ui| {
                 if ui.add(
                     egui::Button::image_and_text(
                         egui::Image::new(egui::include_image!("../icons/plus-square.png"))
                             .tint(Color32::GRAY)
-                            .fit_to_exact_size(vec2(16.0, 16.0)),
+                            .fit_to_exact_size(vec2(16.0, 16.0))
+                            .texture_options(TextureOptions {
+                                magnification: TextureFilter::Nearest,
+                                minification: TextureFilter::Nearest,
+                                wrap_mode: TextureWrapMode::ClampToEdge,
+                            }),
                         "New ingredient"
                     ).min_size(vec2(0.0, 24.0))
                 ).clicked() {
                     self.show_new_ingredient_dialog = true;
+                    self.new_ingredient_nutritional_info = Some(NutritionalInfo {
+                        default_amount: 1,
+                        default_unit: Unit::Grams,
+                        kilocalories: 0.0,
+                        macronutrients: Macronutrients {
+                            proteins: Proteins {
+                                essential_amino_acids: EssentialAminoAcids {
+                                    histidine: 0.0,
+                                    isoleucine: 0.0,
+                                    leucine: 0.0,
+                                    lysine: 0.0,
+                                    methionine: 0.0,
+                                    phenylalanine: 0.0,
+                                    threonine: 0.0,
+                                    tryptophan: 0.0,
+                                    valine: 0.0,
+                                },
+                                non_essential_amino_acids: NonEssentialAminoAcids {
+                                    alanine: 0.0,
+                                    arginine: 0.0,
+                                    asparagine: 0.0,
+                                    aspartic_acid: 0.0,
+                                    cysteine: 0.0,
+                                    glutamic_acid: 0.0,
+                                    glutamine: 0.0,
+                                    glycine: 0.0,
+                                    proline: 0.0,
+                                    serine: 0.0,
+                                    tyrosine: 0.0,
+                                }
+                            },
+                            fats: Fats {
+                                saturated: 0.0,
+                                monounsaturated: 0.0,
+                                polyunsaturated: 0.0,
+                            },
+                            carbohydrates: Carbohydrates {
+                                starch: 0.0,
+                                fiber: 0.0,
+                                sugars: 0.0,
+                                sugar_alcohols: 0.0,
+                            },
+                        },
+                        micronutrients: Micronutrients {
+                            vitamins: Vitamins {
+                                vitamin_a: 0.0,
+                                vitamin_b1: 0.0,
+                                vitamin_b2: 0.0,
+                                vitamin_b3: 0.0,
+                                vitamin_b5: 0.0,
+                                vitamin_b6: 0.0,
+                                vitamin_b9: 0.0,
+                                vitamin_b12: 0.0,
+                                vitamin_c: 0.0,
+                                vitamin_d: 0.0,
+                                vitamin_e: 0.0,
+                                vitamin_k: 0.0,
+                                betaine: 0.0,
+                                choline: 0.0,
+                            },
+                            minerals: Minerals {
+                                calcium: 0.0,
+                                copper: 0.0,
+                                iron: 0.0,
+                                magnesium: 0.0,
+                                manganese: 0.0,
+                                phosphorus: 0.0,
+                                potassium: 0.0,
+                                selenium: 0.0,
+                                sodium: 0.0,
+                                zinc: 0.0,
+                            }
+                        },
+                    });
                 }
             });
-            ui.label(format!("{} entries", self.ingredients_list.len()));
+            ui.label(format!("{} {}", self.ingredients_list.len(), if self.ingredients_list.len() == 1 { "entry" } else { "entries" }));
         });
         if self.show_new_ingredient_dialog {
             self.new_ingredient(ui);
@@ -385,7 +802,8 @@ impl MyContext {
             .cell_layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight)
                 .with_main_align(egui::Align::LEFT)
             )
-            .columns(Column::remainder().resizable(true), 4)
+            .column(Column::auto().resizable(true))
+            .columns(Column::remainder().resizable(true), 2)
             .header(20.0, |mut header| {
                 header.col(|ui| {
                     ui.heading("Categories");
@@ -394,41 +812,45 @@ impl MyContext {
                     ui.heading("Name");
                 });
                 header.col(|ui| {
-                    ui.heading("Amount");
-                });
-                header.col(|ui| {
-                    ui.heading("Unit");
+                    ui.heading("Calories");
                 });
             })
             .body(|body| {
-                body.rows(30.0, ingredients_data.len(), |mut row| {
+                body.rows(30.0, self.ingredients_list.len(), |mut row| {
                     let row_index = row.index();
 
                     row.set_selected(self.selected_ingredient.is_some_and(|idx| idx == row_index));
 
                     row.col(|ui| {
                         ui.horizontal(|ui| {
-                            for category in &ingredients_data[row_index].categories {
+                            for category in &self.ingredients_list[row_index].categories {
                                 let icon_name = &category.icon_name;
 
-                                ui.add(egui::Image::new(get_icon_image_source(icon_name).clone())
+                                let response= ui.add(egui::Image::new(get_icon_image_source(icon_name).clone())
                                     .tint(category.icon_color)
-                                    .texture_options(TextureOptions { 
+                                    .fit_to_exact_size(vec2(16.0, 16.0))
+                                    .texture_options(TextureOptions {
                                         magnification: TextureFilter::Nearest,
                                         minification: TextureFilter::Nearest,
                                         wrap_mode: TextureWrapMode::ClampToEdge,
                                     } ));
+
+                                ui.add_space(-4.0);
+
+                                //Workaround to allow for both clicking rows and showing tooltip
+                                if ui.rect_contains_pointer(response.rect) {
+                                    egui::show_tooltip(ui.ctx(), egui::Id::new("category_tooltip"), |ui| {
+                                        ui.label(category.name.clone());
+                                    });
+                                }
                             }
                         });
                     });
                     row.col(|ui| {
-                        ui.label(&ingredients_data[row_index].name);
+                        ui.label(&self.ingredients_list[row_index].name);
                     });
                     row.col(|ui| {
-                        ui.label(&ingredients_data[row_index].amount.to_string());
-                    });
-                    row.col(|ui| {
-                        ui.label(&ingredients_data[row_index].unit.to_string());
+                        ui.label(&self.ingredients_list[row_index].nutritional_info.estimate_calories().to_string());
                     });
 
                     if row.response().clicked() {
@@ -441,10 +863,15 @@ impl MyContext {
     fn new_category(&mut self, ui: &mut Ui) {
         macro_rules! create_category {
             () => {
-                if self.new_category_name.len() == 0 {
+                let valid_name = self.new_category_name.len() > 0;
+                let valid_icon = self.new_category_selected_icon.is_some();
+                if !valid_name {
                     self.new_category_name_was_empty = true;
                 }
-                else {
+                if !valid_icon {
+                    self.new_category_selected_icon_was_invalid = true;
+                }
+                if valid_name && valid_icon {
                     let mut statement = self.db_connection.prepare(
                         "INSERT INTO categories (name, icon_name, icon_color) VALUES (?1, ?2, ?3);"
                     ).unwrap();
@@ -462,6 +889,11 @@ impl MyContext {
         macro_rules! clear_category {
             () => {
                 self.new_category_name.clear();
+                self.new_category_name_was_empty = false;
+                self.new_category_icon_color = Color32::WHITE;
+                self.new_category_icon_name = String::from("");
+                self.new_category_selected_icon = None;
+                self.new_category_selected_icon_was_invalid = false;
             };
         }
         macro_rules! cancel_category {
@@ -474,8 +906,8 @@ impl MyContext {
         ui.heading("Create new category");
         ui.horizontal(|ui| {
             ui.label("Name: ");
-            let result = ui.text_edit_singleline(&mut self.new_category_name);
-            if result.changed() && self.new_category_name.len() > 0 {
+            let name_result = ui.text_edit_singleline(&mut self.new_category_name);
+            if name_result.changed() && self.new_category_name.len() > 0 {
                 self.new_category_name_was_empty = false;
             }
             if self.new_category_name_was_empty {
@@ -487,20 +919,27 @@ impl MyContext {
             egui::Grid::new("category_icon_grid")
                 .spacing(vec2(-4.0, 0.0))
                 .show(ui, |ui| {
-                    for name in ICON_NAMES {
-                        ui.add(toggle_image::toggle_image(&mut true, &get_icon_image_source(name), self.new_category_icon_color));
-                        /*
-                        ui.add(egui::Image::new(get_icon_image_source(name))
-                            .tint(self.new_category_icon_color)
-                            .texture_options(TextureOptions { 
-                                magnification: TextureFilter::Nearest,
-                                minification: TextureFilter::Nearest,
-                                wrap_mode: TextureWrapMode::ClampToEdge,
-                            })
-                        );
-                        */
+                    for idx in 0..ICON_NAMES.len() {
+                        let active: bool = {
+                            if let Some(index) = self.new_category_selected_icon {
+                                idx == index
+                            }
+                            else {
+                                false
+                            }
+                        };
+                        if ui.add(toggle_image::toggle_image(active, false, &get_icon_image_source(ICON_NAMES[idx]), self.new_category_icon_color, vec2(16.0, 16.0))).changed() {
+                            self.new_category_selected_icon = Some(idx);
+                            self.new_category_icon_name = ICON_NAMES[idx].to_owned();
+                        }
                     }
                 });
+            if let Some(_) = self.new_category_selected_icon {
+                self.new_category_selected_icon_was_invalid = false;
+            }
+            if self.new_category_selected_icon_was_invalid {
+                ui.colored_label(Color32::from_rgb(192, 32, 16), "Category icon is required!");
+            }
         });
         ui.horizontal(|ui| {
             if ui.button("Create").clicked() {
@@ -534,7 +973,7 @@ impl MyContext {
                     self.show_new_category_dialog = true;
                 }
             });
-            ui.label(format!("{} entries", self.ingredients_list.len()));
+            ui.label(format!("{} {}", self.categories_list.len(), if self.categories_list.len() == 1 { "entry" } else { "entries" }));
         });
         if self.show_new_category_dialog {
             self.new_category(ui);
@@ -546,13 +985,17 @@ impl MyContext {
             .cell_layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight)
                 .with_main_align(egui::Align::LEFT)
             )
-            .columns(Column::remainder().resizable(true), 2)
+            .column(Column::auto().resizable(true))
+            .columns(Column::remainder(), 2)
             .header(20.0, |mut header| {
                 header.col(|ui| {
                     ui.heading("Icon");
                 });
                 header.col(|ui| {
                     ui.heading("Name");
+                });
+                header.col(|ui| {
+                    ui.heading("Used #");
                 });
             })
             .body(|body| {
@@ -564,6 +1007,7 @@ impl MyContext {
                     row.col(|ui| {
                         ui.add(egui::Image::new(get_icon_image_source(&category_data[row_index].icon_name).clone())
                             .tint(category_data[row_index].icon_color)
+                            .fit_to_exact_size(vec2(16.0, 16.0))
                             .texture_options(TextureOptions { 
                                 magnification: TextureFilter::Nearest,
                                 minification: TextureFilter::Nearest,
@@ -579,6 +1023,107 @@ impl MyContext {
                     }
                 });
             });
+    }
+
+    fn details_view(&mut self, ui: &mut Ui) {
+        fn nutritional_info_view(ui: &mut Ui, ingredient: &Ingredient) {
+            ui.collapsing("Nutritional info", |ui| {
+                ui.label(format!("per {}{}:",
+                                 ingredient.nutritional_info.default_amount,
+                                 ingredient.nutritional_info.default_unit));
+                ui.collapsing("Macronutrients", |ui| {
+                    ui.horizontal_centered(|ui| {
+                        ui.label(format!("Proteins: {}", ingredient.nutritional_info.macronutrients.proteins.total_proteins()));
+                        ui.label(format!("Fats: {}", ingredient.nutritional_info.macronutrients.fats.total_fats()));
+                        ui.label(format!("Carbohydrates (total/net): {}/{}",
+                                         ingredient.nutritional_info.macronutrients.carbohydrates.total_carbs(),
+                                         ingredient.nutritional_info.macronutrients.carbohydrates.net_carbs()));
+                    });
+                });
+                ui.collapsing("Micronutrients", |ui| {
+                });
+            });
+        }
+
+        if let Some(idx) = self.selected_ingredient {
+            let ingredient = &self.ingredients_list[idx];
+            ui.horizontal(|ui| {
+                for category in &ingredient.categories {
+                    let icon_name = &category.icon_name;
+
+                    ui.add(egui::Image::new(get_icon_image_source(icon_name).clone())
+                        .tint(category.icon_color)
+                        .fit_to_exact_size(vec2(16.0, 16.0))
+                        .texture_options(TextureOptions {
+                            magnification: TextureFilter::Nearest,
+                            minification: TextureFilter::Nearest,
+                            wrap_mode: TextureWrapMode::ClampToEdge,
+                        } )).on_hover_text(category.name.clone());
+
+                    ui.add_space(-4.0);
+                }
+                ui.heading(&ingredient.name);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::RIGHT), |ui| {
+                    if ui.add(
+                        egui::Button::image_and_text(
+                            egui::Image::new(egui::include_image!("../icons/delete.png"))
+                                .tint(Color32::RED)
+                                .fit_to_exact_size(vec2(16.0, 16.0))
+                                .texture_options(TextureOptions {
+                                    magnification: TextureFilter::Nearest,
+                                    minification: TextureFilter::Nearest,
+                                    wrap_mode: TextureWrapMode::ClampToEdge,
+                                }),
+                            "Delete"
+                        ).min_size(vec2(0.0, 24.0))
+                    ).clicked() {
+                        println!("Delete ingredient button pressed!");
+                        let mut delete_statement = self.db_connection.prepare(&get_ingredient_delete_query(ingredient)).unwrap();
+                        let _ = delete_statement.execute([]);
+                    }
+                });
+            });
+            nutritional_info_view(ui, ingredient);
+        }
+        else if let Some(idx) = self.selected_category {
+            let category = &self.categories_list[idx];
+
+            ui.horizontal(|ui| {
+                ui.add_space(-4.0);
+                ui.add(egui::Image::new(get_icon_image_source(&category.icon_name).clone())
+                    .tint(category.icon_color)
+                    .fit_to_exact_size(vec2(16.0, 16.0))
+                    .texture_options(TextureOptions {
+                        magnification: TextureFilter::Nearest,
+                        minification: TextureFilter::Nearest,
+                        wrap_mode: TextureWrapMode::ClampToEdge,
+                    } )).on_hover_text(category.name.clone());
+
+                ui.heading(&category.name);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::RIGHT), |ui| {
+                    if ui.add(
+                        egui::Button::image_and_text(
+                            egui::Image::new(egui::include_image!("../icons/delete.png"))
+                                .tint(Color32::RED)
+                                .fit_to_exact_size(vec2(16.0, 16.0))
+                                .texture_options(TextureOptions {
+                                    magnification: TextureFilter::Nearest,
+                                    minification: TextureFilter::Nearest,
+                                    wrap_mode: TextureWrapMode::ClampToEdge,
+                                }),
+                            "Delete"
+                        ).min_size(vec2(0.0, 24.0))
+                    ).clicked() {
+                        println!("Delete category button pressed!");
+                    }
+                });
+            });
+        }
+        else {
+            ui.centered_and_justified(|ui| {
+                ui.label("-nothing selected-");
+            });
+        }
     }
 
     fn style_editor(&mut self, ui: &mut Ui) {
@@ -957,21 +1502,22 @@ impl TabViewer for MyContext {
         match tab.as_str() {
             "Style Editor" => self.style_editor(ui),
             "Ingredients View" => {
-                if !self.update_ingredients {
-                    self.ingredients_view(ui, self.ingredients_list.clone())
-                }
-                else {
+                self.selected_category = None;
+                if self.update_ingredients {
                     self.update_ingredients = false;
                     let ingredient_data: Vec<Ingredient> = {
-                        let mut statement = self.db_connection.prepare("SELECT name, amount, unit, categories FROM ingredients").unwrap();
+                        //let mut statement = self.db_connection.prepare("SELECT name, amount, unit, categories FROM ingredients").unwrap();
+                        let mut statement = self.db_connection.prepare(get_ingredient_select_query()).unwrap();
                         let ingredients_iter = statement.query_map([], |row| {
                             let categories: Vec<Category> = {
-                                let mut statement2 = self.db_connection.prepare("SELECT name, icon_name, icon_color FROM categories WHERE category_id IN (1)").unwrap();
-                                let categories_iter = statement2.query_map([], |row2| {
+                                let sql = format!("SELECT category_id, name, icon_name, icon_color FROM categories WHERE category_id IN ({})", &row.get::<usize, String>(2).unwrap());
+                                let mut category_statement = self.db_connection.prepare(&sql).unwrap();
+                                let categories_iter = category_statement.query_map([], |category_row| {
                                     Ok(Category {
-                                        name: row2.get(0)?,
-                                        icon_name: row2.get(1)?,
-                                        icon_color: Color32::from_hex(&row2.get::<usize, String>(2).unwrap()).unwrap(),
+                                        id: category_row.get(0)?,
+                                        name: category_row.get(1)?,
+                                        icon_name: category_row.get(2)?,
+                                        icon_color: Color32::from_hex(&category_row.get::<usize, String>(3).unwrap()).unwrap(),
                                     })
                                 }).unwrap();
 
@@ -982,11 +1528,87 @@ impl TabViewer for MyContext {
 
                                 data
                             };
+                            let nutritional_info: NutritionalInfo = {
+                                NutritionalInfo {
+                                    default_amount: row.get(3)?,
+                                    default_unit: Unit::from_uint(row.get(4)?),
+                                    kilocalories: 123.0,
+                                    macronutrients: Macronutrients {
+                                        proteins: Proteins {
+                                            essential_amino_acids: EssentialAminoAcids {
+                                                histidine: row.get(5)?,
+                                                isoleucine: row.get(6)?,
+                                                leucine: row.get(7)?,
+                                                lysine: row.get(8)?,
+                                                methionine: row.get(9)?,
+                                                phenylalanine: row.get(10)?,
+                                                threonine: row.get(11)?,
+                                                tryptophan: row.get(12)?,
+                                                valine: row.get(13)?,
+                                            },
+                                            non_essential_amino_acids: NonEssentialAminoAcids {
+                                                alanine: row.get(14)?,
+                                                arginine: row.get(15)?,
+                                                asparagine: row.get(16)?,
+                                                aspartic_acid: row.get(17)?,
+                                                cysteine: row.get(18)?,
+                                                glutamic_acid: row.get(19)?,
+                                                glutamine: row.get(20)?,
+                                                glycine: row.get(21)?,
+                                                proline: row.get(22)?,
+                                                serine: row.get(23)?,
+                                                tyrosine: row.get(24)?,
+                                            },
+                                        },
+                                        fats: Fats {
+                                            saturated: row.get(25)?,
+                                            monounsaturated: row.get(26)?,
+                                            polyunsaturated: row.get(27)?,
+                                        },
+                                        carbohydrates: Carbohydrates {
+                                            starch: row.get(28)?,
+                                            fiber: row.get(29)?,
+                                            sugars: row.get(30)?,
+                                            sugar_alcohols: row.get(31)?,
+                                        }
+                                    },
+                                    micronutrients: Micronutrients {
+                                        vitamins: Vitamins {
+                                            vitamin_a: row.get(32)?,
+                                            vitamin_b1: row.get(33)?,
+                                            vitamin_b2: row.get(34)?,
+                                            vitamin_b3: row.get(35)?,
+                                            vitamin_b5: row.get(36)?,
+                                            vitamin_b6: row.get(37)?,
+                                            vitamin_b9: row.get(38)?,
+                                            vitamin_b12: row.get(39)?,
+                                            vitamin_c: row.get(40)?,
+                                            vitamin_d: row.get(41)?,
+                                            vitamin_e: row.get(42)?,
+                                            vitamin_k: row.get(43)?,
+                                            betaine: row.get(44)?,
+                                            choline: row.get(45)?,
+                                        },
+                                        minerals: Minerals {
+                                            calcium: row.get(46)?,
+                                            copper: row.get(47)?,
+                                            iron: row.get(48)?,
+                                            magnesium: row.get(49)?,
+                                            manganese: row.get(50)?,
+                                            phosphorus: row.get(51)?,
+                                            potassium: row.get(52)?,
+                                            selenium: row.get(53)?,
+                                            sodium: row.get(54)?,
+                                            zinc: row.get(55)?,
+                                        }
+                                    }
+                                }
+                            };
                             Ok(Ingredient {
-                                name: row.get(0)?,
-                                amount: row.get(1)?,
-                                unit: Unit::from_uint(row.get::<usize, i64>(2).unwrap() as u32),
-                                categories
+                                id: row.get(0)?,
+                                name: row.get(1)?,
+                                categories,
+                                nutritional_info,
                             })
                         }).unwrap();
 
@@ -998,22 +1620,48 @@ impl TabViewer for MyContext {
                         data
                     };
                     self.ingredients_list = ingredient_data.clone();
-                    self.ingredients_view(ui, ingredient_data)
                 }
+
+                if self.update_categories {
+                    self.update_categories = false;
+                    let categories_data: Vec<Category> = {
+                        let mut statement = self.db_connection.prepare("SELECT category_id, name, icon_name, icon_color FROM categories").unwrap();
+                        let categories_iter = statement.query_map([], |row| {
+                            Ok(Category {
+                                id: row.get(0)?,
+                                name: row.get(1)?,
+                                icon_name: row.get(2)?,
+                                icon_color: Color32::from_hex(&row.get::<usize, String>(3).expect("Could not parse hex value into color!")).unwrap(),
+                            })
+                        }).unwrap();
+
+                        let mut data: Vec<Category> = Vec::new();
+                        for category in categories_iter {
+                            data.push(category.unwrap());
+                        }
+
+                        data
+                    };
+                    self.categories_list = categories_data.clone();
+                }
+
+                self.ingredients_view(ui);
             },
             "Categories View" => {
+                self.selected_ingredient = None;
                 if !self.update_categories {
                     self.categories_view(ui, self.categories_list.clone())
                 }
                 else {
                     self.update_categories = false;
                     let categories_data: Vec<Category> = {
-                        let mut statement = self.db_connection.prepare("SELECT name, icon_name, icon_color FROM categories").unwrap();
+                        let mut statement = self.db_connection.prepare("SELECT category_id, name, icon_name, icon_color FROM categories").unwrap();
                         let categories_iter = statement.query_map([], |row| {
                             Ok(Category {
-                                name: row.get(0)?,
-                                icon_name: row.get(1)?,
-                                icon_color: Color32::from_hex(&row.get::<usize, String>(2).expect("Could not parse hex value into color!")).unwrap(),
+                                id: row.get(0)?,
+                                name: row.get(1)?,
+                                icon_name: row.get(2)?,
+                                icon_color: Color32::from_hex(&row.get::<usize, String>(3).expect("Could not parse hex value into color!")).unwrap(),
                             })
                         }).unwrap();
 
@@ -1027,6 +1675,9 @@ impl TabViewer for MyContext {
                     self.categories_list = categories_data.clone();
                     self.categories_view(ui, categories_data)
                 }
+            },
+            "Details" => {
+                self.details_view(ui)
             },
             _ => {
                 ui.label(tab.as_str());
