@@ -58,7 +58,7 @@ pub struct Ingredient {
 
 #[derive(Clone)]
 pub struct NutritionalInfo {
-    pub default_amount: u32,
+    pub default_amount: f32,
     pub default_unit: Unit,
 
     pub kilocalories: f32,
