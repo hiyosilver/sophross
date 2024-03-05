@@ -2,9 +2,11 @@
 
 mod ingredients;
 mod toggle_image;
+mod pie_chart;
 
 use ingredients::*;
 use toggle_image::toggle_image;
+use pie_chart::pie_chart;
 
 use std::collections::{HashSet};
 
@@ -61,11 +63,11 @@ const ICON_NAMES: [&str; 6] = ["apple", "bean", "bread", "candy", "drink", "drop
 fn get_icon_image_source(id: &str) -> ImageSource {
     match id {
         "apple" => egui::include_image!("../icons/categories/apple.png"),
-        "bean" => egui::include_image!("../icons/categories/bean.png"),
+        //"bean" => egui::include_image!("../icons/categories/bean.png"),
         "bread" => egui::include_image!("../icons/categories/bread.png"),
-        "candy" => egui::include_image!("../icons/categories/candy.png"),
-        "drink" => egui::include_image!("../icons/categories/drink.png"),
-        "drop" => egui::include_image!("../icons/categories/drop.png"),
+        //"candy" => egui::include_image!("../icons/categories/candy.png"),
+        //"drink" => egui::include_image!("../icons/categories/drink.png"),
+        //"drop" => egui::include_image!("../icons/categories/drop.png"),
         _ => egui::include_image!("../icons/categories/placeholder.png")
     }
 }
@@ -293,7 +295,7 @@ fn get_ingredient_insert_query(ingredient: Ingredient) -> String {
         INSERT INTO _variables (var_name, value) VALUES ('nutritional_info_id', last_insert_rowid());
 
         INSERT INTO protein_sets (
-            nutrition_set_id,
+            nutrition_info_id,
             --essentials
             histidine, isoleucine, leucine, lysine, methionine, phenylalanine,
             threonine, tryptophan, valine,
@@ -305,21 +307,21 @@ fn get_ingredient_insert_query(ingredient: Ingredient) -> String {
             {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1});
 
         INSERT INTO fat_sets (
-            nutrition_set_id,
+            nutrition_info_id,
             saturated, monounsaturated, polyunsaturated
         )
         VALUES ((SELECT value FROM _variables WHERE var_name = 'nutritional_info_id' LIMIT 1),
             {:.1}, {:.1}, {:.1});
 
         INSERT INTO carbohydrate_sets (
-            nutrition_set_id,
+            nutrition_info_id,
             starch, fiber, sugars, sugar_alcohols
         )
         VALUES ((SELECT value FROM _variables WHERE var_name = 'nutritional_info_id' LIMIT 1),
             {:.1}, {:.1}, {:.1}, {:.1});
 
         INSERT INTO vitamin_sets (
-            nutrition_set_id,
+            nutrition_info_id,
             vitamin_a, vitamin_b1, vitamin_b2, vitamin_b3, vitamin_b5, vitamin_b6, vitamin_b9,
             vitamin_b12, vitamin_c, vitamin_d, vitamin_e, vitamin_k, betaine, choline
         )
@@ -327,7 +329,7 @@ fn get_ingredient_insert_query(ingredient: Ingredient) -> String {
             {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1});
 
         INSERT INTO mineral_sets (
-            nutrition_set_id,
+            nutrition_info_id,
             calcium, copper, iron, magnesium, manganese,
             phosphorus, potassium, selenium, sodium, zinc
         )
@@ -1072,6 +1074,9 @@ impl MyContext {
                         ui.label(format!("Carbohydrates (total/net): {}/{}",
                                          ingredient.nutritional_info.macronutrients.carbohydrates.total_carbs(),
                                          ingredient.nutritional_info.macronutrients.carbohydrates.net_carbs()));
+                                         
+                        ui.add(pie_chart::pie_chart(vec2(4.0, 4.0)))
+                            .on_hover_text_at_pointer("This is a pie chart!");
                     });
                 });
                 ui.collapsing("Micronutrients", |ui| {
@@ -1100,7 +1105,8 @@ impl MyContext {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::RIGHT), |ui| {
                     if ui.add(
                         egui::Button::image_and_text(
-                            egui::Image::new(egui::include_image!("../icons/delete.png"))
+                            //egui::Image::new(egui::include_image!("../icons/delete.png"))
+                            egui::Image::new(egui::include_image!("../icons/categories/placeholder.png"))
                                 .tint(Color32::RED)
                                 .fit_to_exact_size(vec2(16.0, 16.0))
                                 .texture_options(TextureOptions {
@@ -1147,7 +1153,8 @@ impl MyContext {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::RIGHT), |ui| {
                     if ui.add(
                         egui::Button::image_and_text(
-                            egui::Image::new(egui::include_image!("../icons/delete.png"))
+                            //egui::Image::new(egui::include_image!("../icons/delete.png"))
+                            egui::Image::new(egui::include_image!("../icons/categories/placeholder.png"))
                                 .tint(Color32::RED)
                                 .fit_to_exact_size(vec2(16.0, 16.0))
                                 .texture_options(TextureOptions {
