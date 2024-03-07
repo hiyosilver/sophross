@@ -6,13 +6,13 @@ mod pie_chart;
 
 use ingredients::*;
 use toggle_image::toggle_image;
-use pie_chart::pie_chart;
+use pie_chart::{pie_chart, PieChartSlice};
 
 use std::collections::{HashSet};
 
 use eframe::{egui, NativeOptions};
 use eframe::epaint::textures::TextureFilter;
-use egui::{color_picker::{color_edit_button_srgba, Alpha}, vec2, CentralPanel, ComboBox, Frame, Rounding, Slider, TopBottomPanel, Ui, ViewportBuilder, WidgetText, Style as BaseStyle, Visuals, Color32, Stroke, SizeHint, TextureOptions, ImageSource, TextureWrapMode, CursorIcon};
+use egui::{color_picker::{color_edit_button_srgba, Alpha}, vec2, CentralPanel, ComboBox, Frame, Rounding, Slider, TopBottomPanel, Ui, ViewportBuilder, WidgetText, Style as BaseStyle, Visuals, Color32, Stroke, SizeHint, TextureOptions, ImageSource, TextureWrapMode, CursorIcon, Direction, Align};
 
 use egui_dock::{
     AllowedSplits, DockArea, DockState, NodeIndex, OverlayType, Style, SurfaceIndex,
@@ -63,11 +63,11 @@ const ICON_NAMES: [&str; 6] = ["apple", "bean", "bread", "candy", "drink", "drop
 fn get_icon_image_source(id: &str) -> ImageSource {
     match id {
         "apple" => egui::include_image!("../icons/categories/apple.png"),
-        //"bean" => egui::include_image!("../icons/categories/bean.png"),
+        "bean" => egui::include_image!("../icons/categories/bean.png"),
         "bread" => egui::include_image!("../icons/categories/bread.png"),
-        //"candy" => egui::include_image!("../icons/categories/candy.png"),
-        //"drink" => egui::include_image!("../icons/categories/drink.png"),
-        //"drop" => egui::include_image!("../icons/categories/drop.png"),
+        "candy" => egui::include_image!("../icons/categories/candy.png"),
+        "drink" => egui::include_image!("../icons/categories/drink.png"),
+        "drop" => egui::include_image!("../icons/categories/drop.png"),
         _ => egui::include_image!("../icons/categories/placeholder.png")
     }
 }
@@ -1068,18 +1068,25 @@ impl MyContext {
                 ui.label(format!("Calories: {}",
                                  ingredient.nutritional_info.kilocalories));
                 ui.collapsing("Macronutrients", |ui| {
-                    ui.horizontal_centered(|ui| {
-                        ui.label(format!("Proteins: {}", ingredient.nutritional_info.macronutrients.proteins.total_proteins()));
-                        ui.label(format!("Fats: {}", ingredient.nutritional_info.macronutrients.fats.total_fats()));
-                        ui.label(format!("Carbohydrates (total/net): {}/{}",
-                                         ingredient.nutritional_info.macronutrients.carbohydrates.total_carbs(),
-                                         ingredient.nutritional_info.macronutrients.carbohydrates.net_carbs()));
-                                         
-                        ui.add(pie_chart::pie_chart(vec2(4.0, 4.0)))
-                            .on_hover_text_at_pointer("This is a pie chart!");
+                    ui.with_layout(egui::Layout::left_to_right(Align::Center), |ui| {
+                        ui.with_layout(egui::Layout::top_down(Align::LEFT), |ui| {
+                            ui.label(format!("Proteins: {}", ingredient.nutritional_info.macronutrients.proteins.total_proteins()));
+                            ui.label(format!("Fats: {}", ingredient.nutritional_info.macronutrients.fats.total_fats()));
+                            ui.label(format!("Carbohydrates (total/net): {}/{}",
+                                 ingredient.nutritional_info.macronutrients.carbohydrates.total_carbs(),
+                                 ingredient.nutritional_info.macronutrients.carbohydrates.net_carbs()));
+                        });
+
+                        ui.add(pie_chart::pie_chart(vec2(4.0, 4.0), vec![
+                            PieChartSlice { fraction: 1.0 / 3.0, color: Color32::LIGHT_GREEN, tooltip: "Protein".to_owned() },
+                            PieChartSlice { fraction: 1.0 / 3.0, color: Color32::LIGHT_BLUE, tooltip: "Fat".to_owned() },
+                            PieChartSlice { fraction: 1.0 / 3.0, color: Color32::LIGHT_RED, tooltip: "Carbohydrates".to_owned() },
+                        ]));
+                        //.on_hover_text_at_pointer("This is a pie chart!");
                     });
                 });
                 ui.collapsing("Micronutrients", |ui| {
+                    ui.label("This is a placeholder.");
                 });
             });
         }
@@ -1105,8 +1112,7 @@ impl MyContext {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::RIGHT), |ui| {
                     if ui.add(
                         egui::Button::image_and_text(
-                            //egui::Image::new(egui::include_image!("../icons/delete.png"))
-                            egui::Image::new(egui::include_image!("../icons/categories/placeholder.png"))
+                            egui::Image::new(egui::include_image!("../icons/delete.png"))
                                 .tint(Color32::RED)
                                 .fit_to_exact_size(vec2(16.0, 16.0))
                                 .texture_options(TextureOptions {
@@ -1153,8 +1159,7 @@ impl MyContext {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::RIGHT), |ui| {
                     if ui.add(
                         egui::Button::image_and_text(
-                            //egui::Image::new(egui::include_image!("../icons/delete.png"))
-                            egui::Image::new(egui::include_image!("../icons/categories/placeholder.png"))
+                            egui::Image::new(egui::include_image!("../icons/delete.png"))
                                 .tint(Color32::RED)
                                 .fit_to_exact_size(vec2(16.0, 16.0))
                                 .texture_options(TextureOptions {
