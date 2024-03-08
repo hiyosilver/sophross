@@ -78,17 +78,17 @@ fn generate_pie_chart(ui: &mut egui::Ui, size: Vec2, mut slices: Vec<PieChartSli
                 }
                 intersection_count % 2 == 1
             }
-
-            let mut stroke: Stroke = Stroke::NONE;
+            
+            let mut hovered: bool = false;
             ui.input(|i|
                 if let Some(pointer_pos) = i.pointer.latest_pos() {
-                    if pointer_pos.distance(rect.center()) <= radius && is_point_in_polygon(pointer_pos, &polygon) {
-                        stroke = Stroke::new(2.0, Color32::WHITE);
-                    }
+                    hovered = pointer_pos.distance(rect.center()) <= radius && is_point_in_polygon(pointer_pos, &polygon);
                 }
             );
 
-            if stroke != Stroke::NONE {
+            let mut stroke: Stroke = Stroke::NONE;
+            if hovered {
+                stroke = Stroke::new(2.0, Color32::WHITE);
                 egui::show_tooltip(ui.ctx(), egui::Id::new("tooltip"), |ui| {
                     ui.label(format!("{:.2}% {}", slice.fraction * 100.0, &slice.tooltip));
                 });

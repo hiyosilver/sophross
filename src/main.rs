@@ -81,7 +81,8 @@ fn setup_database() -> Connection {
     let ingredients_create_query = "
         CREATE TABLE IF NOT EXISTS ingredients (
             id INTEGER PRIMARY KEY,
-            name TEXT
+            name TEXT,
+            brand TEXT
         );
     ";
     db_connection.execute(ingredients_create_query, ()).unwrap();
@@ -222,7 +223,7 @@ fn setup_database() -> Connection {
 fn get_ingredient_select_query() -> &'static str {
     "
     SELECT
-        ing.id, name,
+        ing.id, name, brand,
         default_amount, default_unit, kilocalories,
         --essentials
         histidine, isoleucine, leucine, lysine, methionine, phenylalanine,
@@ -276,9 +277,9 @@ fn get_ingredient_insert_query(ingredient: Ingredient) -> String {
         CREATE TEMP TABLE IF NOT EXISTS _variables(var_name TEXT, value INTEGER);
 
         INSERT INTO ingredients (
-            name
+            name, brand
         )
-        VALUES ('{}');
+        VALUES ('{}', '{}');
 
         INSERT INTO _variables (var_name, value) VALUES ('ingredient_id', last_insert_rowid());
 
@@ -341,6 +342,7 @@ fn get_ingredient_insert_query(ingredient: Ingredient) -> String {
         COMMIT;
         ",
         ingredient.name,
+        ingredient.brand,
         category_inserts(&ingredient),
         ingredient.nutritional_info.default_amount,
         ingredient.nutritional_info.default_unit as u8,
@@ -423,8 +425,9 @@ fn main() -> eframe::Result<()> {
     std::env::set_var("RUST_BACKTRACE", "1");
     let options = NativeOptions {
         viewport: ViewportBuilder::default()
-            .with_inner_size(vec2(1200.0, 800.0))
-            .with_min_inner_size(vec2(640.0, 480.0)),
+            //.with_inner_size(vec2(1200.0, 800.0))
+            //.with_min_inner_size(vec2(640.0, 480.0))
+            .with_maximized(true),
         ..Default::default()
     };
 
@@ -499,6 +502,7 @@ impl Default for MyApp {
 
             new_ingredient_name: String::from(""),
             new_ingredient_name_was_empty: false,
+            new_ingredient_brand: String::from(""),
             new_ingredient_amount: 1.0,
             new_ingredient_unit: Unit::Grams,
             new_ingredient_calories: 0.0,
@@ -601,6 +605,7 @@ struct MyContext {
 
     new_ingredient_name: String,
     new_ingredient_name_was_empty: bool,
+    new_ingredient_brand: String,
     new_ingredient_amount: f32,
     new_ingredient_unit: Unit,
     new_ingredient_calories: f32,
@@ -636,6 +641,7 @@ impl MyContext {
                         Ingredient {
                             id: 0,
                             name: self.new_ingredient_name.clone(),
+                            brand: self.new_ingredient_brand.clone(),
                             categories: self.new_ingredient_selected_categories.iter().map(|n| self.categories_list[*n].clone()).collect(),
                             nutritional_info: self.new_ingredient_nutritional_info.clone().unwrap()
                         }
@@ -650,6 +656,7 @@ impl MyContext {
             () => {
                 self.new_ingredient_name.clear();
                 self.new_ingredient_name_was_empty = false;
+                self.new_ingredient_brand.clear();
                 self.new_ingredient_amount = 1.0;
                 self.new_ingredient_selected_categories.clear();
                 self.new_ingredient_calories = 0.0;
@@ -675,6 +682,10 @@ impl MyContext {
                     Color32::from_rgb(192, 32, 16),
                     egui::RichText::new("Name is required!").strong());
             }
+        });
+        ui.horizontal(|ui| {
+            ui.label("Brand: ");
+            let result = ui.text_edit_singleline(&mut self.new_ingredient_brand);
         });
         ui.horizontal(|ui| {
             ui.label("Amount: ");
@@ -837,13 +848,16 @@ impl MyContext {
                 .with_main_align(egui::Align::LEFT)
             )
             .column(Column::auto().resizable(true))
-            .columns(Column::remainder().resizable(true), 2)
+            .columns(Column::remainder().resizable(true), 3)
             .header(20.0, |mut header| {
                 header.col(|ui| {
                     ui.heading("Categories");
                 });
                 header.col(|ui| {
                     ui.heading("Name");
+                });
+                header.col(|ui| {
+                    ui.heading("Brand");
                 });
                 header.col(|ui| {
                     ui.heading("Calories");
@@ -882,6 +896,9 @@ impl MyContext {
                     });
                     row.col(|ui| {
                         ui.label(&self.ingredients_list[row_index].name);
+                    });
+                    row.col(|ui| {
+                        ui.label(&self.ingredients_list[row_index].brand);
                     });
                     row.col(|ui| {
                         ui.label(&self.ingredients_list[row_index].nutritional_info.kilocalories.to_string());
@@ -1061,32 +1078,54 @@ impl MyContext {
 
     fn details_view(&mut self, ui: &mut Ui) {
         fn nutritional_info_view(ui: &mut Ui, ingredient: &Ingredient) {
-            ui.collapsing("Nutritional info", |ui| {
-                ui.label(format!("per {}{}:",
-                                 ingredient.nutritional_info.default_amount,
-                                 ingredient.nutritional_info.default_unit));
-                ui.label(format!("Calories: {}",
-                                 ingredient.nutritional_info.kilocalories));
-                ui.collapsing("Macronutrients", |ui| {
-                    ui.with_layout(egui::Layout::left_to_right(Align::Center), |ui| {
-                        ui.with_layout(egui::Layout::top_down(Align::LEFT), |ui| {
-                            ui.label(format!("Proteins: {}", ingredient.nutritional_info.macronutrients.proteins.total_proteins()));
-                            ui.label(format!("Fats: {}", ingredient.nutritional_info.macronutrients.fats.total_fats()));
-                            ui.label(format!("Carbohydrates (total/net): {}/{}",
-                                 ingredient.nutritional_info.macronutrients.carbohydrates.total_carbs(),
-                                 ingredient.nutritional_info.macronutrients.carbohydrates.net_carbs()));
-                        });
-
-                        ui.add(pie_chart::pie_chart(vec2(4.0, 4.0), vec![
-                            PieChartSlice { fraction: 1.0 / 3.0, color: Color32::LIGHT_GREEN, tooltip: "Protein".to_owned() },
-                            PieChartSlice { fraction: 1.0 / 3.0, color: Color32::LIGHT_BLUE, tooltip: "Fat".to_owned() },
-                            PieChartSlice { fraction: 1.0 / 3.0, color: Color32::LIGHT_RED, tooltip: "Carbohydrates".to_owned() },
-                        ]));
-                        //.on_hover_text_at_pointer("This is a pie chart!");
+            ui.label(format!("per {}{}:",
+                ingredient.nutritional_info.default_amount,
+                ingredient.nutritional_info.default_unit));
+            ui.label(format!("Calories: {}",
+                ingredient.nutritional_info.kilocalories));
+            ui.collapsing("Macronutrients", |ui| {
+                ui.with_layout(egui::Layout::left_to_right(Align::Center), |ui| {
+                    ui.with_layout(egui::Layout::top_down(Align::LEFT), |ui| {
+                        ui.label(format!("Protein: {}", ingredient.nutritional_info.macronutrients.proteins.total_proteins()));
+                        ui.label(format!("Fat: {}", ingredient.nutritional_info.macronutrients.fats.total_fats()));
+                        ui.label(format!("Carbohydrates (net): {}", ingredient.nutritional_info.macronutrients.carbohydrates.net_carbs()));
                     });
+
+                    ui.add(pie_chart::pie_chart(vec2(4.0, 4.0), vec![
+                        PieChartSlice { fraction: 1.0 / 3.0, color: Color32::LIGHT_GREEN, tooltip: "Protein".to_owned() },
+                        PieChartSlice { fraction: 1.0 / 3.0, color: Color32::LIGHT_BLUE, tooltip: "Fat".to_owned() },
+                        PieChartSlice { fraction: 1.0 / 3.0, color: Color32::LIGHT_RED, tooltip: "Carbohydrates".to_owned() },
+                    ]));
                 });
-                ui.collapsing("Micronutrients", |ui| {
-                    ui.label("This is a placeholder.");
+            });
+            ui.collapsing("Micronutrients", |ui| {
+                ui.collapsing("Vitamins", |ui| {
+                    ui.label(format!("Vitamin A: {}", ingredient.nutritional_info.micronutrients.vitamins.vitamin_a));
+                    ui.label(format!("Vitamin B1: {}", ingredient.nutritional_info.micronutrients.vitamins.vitamin_b1));
+                    ui.label(format!("Vitamin B2: {}", ingredient.nutritional_info.micronutrients.vitamins.vitamin_b2));
+                    ui.label(format!("Vitamin B3: {}", ingredient.nutritional_info.micronutrients.vitamins.vitamin_b3));
+                    ui.label(format!("Vitamin B5: {}", ingredient.nutritional_info.micronutrients.vitamins.vitamin_b5));
+                    ui.label(format!("Vitamin B6: {}", ingredient.nutritional_info.micronutrients.vitamins.vitamin_b6));
+                    ui.label(format!("Vitamin B9: {}", ingredient.nutritional_info.micronutrients.vitamins.vitamin_b9));
+                    ui.label(format!("Vitamin B12: {}", ingredient.nutritional_info.micronutrients.vitamins.vitamin_b12));
+                    ui.label(format!("Vitamin C: {}", ingredient.nutritional_info.micronutrients.vitamins.vitamin_c));
+                    ui.label(format!("Vitamin D: {}", ingredient.nutritional_info.micronutrients.vitamins.vitamin_d));
+                    ui.label(format!("Vitamin E: {}", ingredient.nutritional_info.micronutrients.vitamins.vitamin_e));
+                    ui.label(format!("Vitamin K: {}", ingredient.nutritional_info.micronutrients.vitamins.vitamin_k));
+                    ui.label(format!("Betaine: {}", ingredient.nutritional_info.micronutrients.vitamins.betaine));
+                    ui.label(format!("Choline: {}", ingredient.nutritional_info.micronutrients.vitamins.choline));
+                });
+                ui.collapsing("Minerals", |ui| {
+                    ui.label(format!("Calcium: {}", ingredient.nutritional_info.micronutrients.minerals.calcium));
+                    ui.label(format!("Copper: {}", ingredient.nutritional_info.micronutrients.minerals.copper));
+                    ui.label(format!("Iron: {}", ingredient.nutritional_info.micronutrients.minerals.iron));
+                    ui.label(format!("Magnesium: {}", ingredient.nutritional_info.micronutrients.minerals.magnesium));
+                    ui.label(format!("Manganese: {}", ingredient.nutritional_info.micronutrients.minerals.manganese));
+                    ui.label(format!("Phosphorus: {}", ingredient.nutritional_info.micronutrients.minerals.phosphorus));
+                    ui.label(format!("Potassium: {}", ingredient.nutritional_info.micronutrients.minerals.potassium));
+                    ui.label(format!("Selenium: {}", ingredient.nutritional_info.micronutrients.minerals.selenium));
+                    ui.label(format!("Sodium: {}", ingredient.nutritional_info.micronutrients.minerals.sodium));
+                    ui.label(format!("Zinc: {}", ingredient.nutritional_info.micronutrients.minerals.zinc));
                 });
             });
         }
@@ -1108,7 +1147,8 @@ impl MyContext {
 
                     ui.add_space(-4.0);
                 }
-                ui.heading(&ingredient.name);
+                ui.label(egui::RichText::new(&ingredient.name).heading().underline());
+                ui.label(egui::RichText::new(&ingredient.brand).italics());
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::RIGHT), |ui| {
                     if ui.add(
                         egui::Button::image_and_text(
@@ -1679,6 +1719,7 @@ impl TabViewer for MyContext {
                             Ok(Ingredient {
                                 id: row.get("id")?,
                                 name: row.get("name")?,
+                                brand: row.get("brand")?,
                                 categories,
                                 nutritional_info,
                             })

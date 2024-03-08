@@ -52,6 +52,7 @@ pub struct Category {
 pub struct Ingredient {
     pub id: u32,
     pub name: String,
+    pub brand: String,
     pub categories: Vec<Category>,
     pub nutritional_info: NutritionalInfo,
 }
