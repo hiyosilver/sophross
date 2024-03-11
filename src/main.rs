@@ -12,16 +12,18 @@ use std::collections::{HashSet};
 
 use eframe::{egui, NativeOptions};
 use eframe::epaint::textures::TextureFilter;
-use egui::{color_picker::{color_edit_button_srgba, Alpha}, vec2, CentralPanel, ComboBox, Frame, Rounding, Slider, TopBottomPanel, Ui, ViewportBuilder, WidgetText, Style as BaseStyle, Visuals, Color32, Stroke, SizeHint, TextureOptions, ImageSource, TextureWrapMode, CursorIcon, Direction, Align};
+use egui::{color_picker::{color_edit_button_srgba, Alpha}, vec2, CentralPanel, ComboBox, Frame, Rounding, Slider, TopBottomPanel, Ui, ViewportBuilder, WidgetText, Style as BaseStyle, Visuals, Color32, Stroke, SizeHint, TextureOptions, ImageSource, TextureWrapMode, CursorIcon, Direction, Align, Vec2};
 
 use egui_dock::{
     AllowedSplits, DockArea, DockState, NodeIndex, OverlayType, Style, SurfaceIndex,
     TabInteractionStyle, TabViewer,
 };
 
-use egui_extras::{TableBuilder, Column};
+use egui_extras::{TableBuilder, Column, DatePickerButton};
 
 use rusqlite::{params, Connection};
+
+use chrono::NaiveDate;
 
 macro_rules! labeled_widget {
     ($ui:expr, $x:expr, $l:expr) => {
@@ -452,18 +454,19 @@ struct MyApp {
 
 impl Default for MyApp {
     fn default() -> Self {
+        let phi: f32 = (1.0 + 5.0_f32.sqrt()) / 2.0;
         let mut dock_state =
             DockState::new(vec!["Ingredients View".to_owned(), "Categories View".to_owned(), "Style Editor".to_owned()]);
         dock_state.translations.tab_context_menu.eject_button = "Undock".to_owned();
         let [a, b] =
             dock_state
                 .main_surface_mut()
-                .split_left(NodeIndex::root(), 0.3, vec!["Inspector".to_owned()],
+                .split_left(NodeIndex::root(), 1.0 - (1.0 / phi), vec!["Daily Log".to_owned()],
         );
         let [_, _] =
             dock_state
                 .main_surface_mut()
-                .split_below(a,2.0/3.0, vec!["Details".to_owned()],
+                .split_below(a, 1.0 / phi, vec!["Details".to_owned()],
         );
         let [_, _] =
             dock_state
@@ -485,6 +488,8 @@ impl Default for MyApp {
         let context = MyContext {
             style: None,
             open_tabs,
+
+            date: None,
 
             show_window_close: true,
             show_window_collapse: true,
@@ -531,6 +536,8 @@ impl Default for MyApp {
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.context.date.get_or_insert_with(|| chrono::offset::Utc::now().date_naive());
+
         egui_extras::install_image_loaders(ctx);
         TopBottomPanel::top("egui_dock::MenuBar").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
@@ -588,6 +595,8 @@ struct MyContext {
     pub style: Option<Style>,
     open_tabs: HashSet<String>,
 
+    date: Option<NaiveDate>,
+
     show_close_buttons: bool,
     show_add_buttons: bool,
     draggable_tabs: bool,
@@ -596,7 +605,7 @@ struct MyContext {
     show_window_close: bool,
     show_window_collapse: bool,
 
-    db_connection: rusqlite::Connection,
+    db_connection: Connection,
 
     ingredients_list: Vec<Ingredient>,
     show_new_ingredient_dialog: bool,
@@ -689,18 +698,28 @@ impl MyContext {
         });
         ui.horizontal(|ui| {
             ui.label("Amount: ");
-            ui.add(egui::DragValue::new(&mut self.new_ingredient_amount));
+            ui.add(egui::DragValue::new(&mut self.new_ingredient_amount).clamp_range(0..=9999));
             ComboBox::from_label("Default unit")
                 .selected_text(self.new_ingredient_unit.to_string())
                 .show_ui(ui, |ui| {
                     for unit in [Unit::Grams, Unit::Teaspoons, Unit::Tablespoons, Unit::Pieces] {
                         ui.selectable_value(&mut self.new_ingredient_unit, unit, unit.to_string());
                     }
+                    /*
+                    ui.add(egui::Image::new(get_icon_image_source("apple"))
+                        .tint(Color32::LIGHT_GREEN)
+                        .fit_to_exact_size(vec2(16.0, 16.0))
+                        .texture_options(TextureOptions {
+                            magnification: TextureFilter::Nearest,
+                            minification: TextureFilter::Nearest,
+                            wrap_mode: TextureWrapMode::ClampToEdge,
+                        }));
+                    */
                 })
         });
         ui.horizontal(|ui| {
             ui.label("Calories: ");
-            ui.add(egui::DragValue::new(&mut self.new_ingredient_calories));
+            ui.add(egui::DragValue::new(&mut self.new_ingredient_calories).clamp_range(0..=9999));
         });
         ui.horizontal(|ui| {
             egui::Grid::new("category_icon_grid")
@@ -1084,13 +1103,12 @@ impl MyContext {
             ui.label(format!("Calories: {}",
                 ingredient.nutritional_info.kilocalories));
             ui.collapsing("Macronutrients", |ui| {
-                ui.with_layout(egui::Layout::left_to_right(Align::Center), |ui| {
-                    ui.with_layout(egui::Layout::top_down(Align::LEFT), |ui| {
-                        ui.label(format!("Protein: {}", ingredient.nutritional_info.macronutrients.proteins.total_proteins()));
-                        ui.label(format!("Fat: {}", ingredient.nutritional_info.macronutrients.fats.total_fats()));
-                        ui.label(format!("Carbohydrates (net): {}", ingredient.nutritional_info.macronutrients.carbohydrates.net_carbs()));
-                    });
-
+                ui.allocate_ui_with_layout(ui.available_size(), egui::Layout::left_to_right(Align::Center), |ui| {
+                    ui.label(format!("Protein: {}\nFat: {}\nCarbohydrates (net): {}",
+                         ingredient.nutritional_info.macronutrients.proteins.total_proteins(),
+                         ingredient.nutritional_info.macronutrients.fats.total_fats(),
+                         ingredient.nutritional_info.macronutrients.carbohydrates.net_carbs()
+                    ));
                     ui.add(pie_chart::pie_chart(vec2(4.0, 4.0), vec![
                         PieChartSlice { fraction: 1.0 / 3.0, color: Color32::LIGHT_GREEN, tooltip: "Protein".to_owned() },
                         PieChartSlice { fraction: 1.0 / 3.0, color: Color32::LIGHT_BLUE, tooltip: "Fat".to_owned() },
@@ -1235,6 +1253,11 @@ impl MyContext {
                 ui.label("-nothing selected-");
             });
         }
+    }
+
+    fn daily_log_view(&mut self, ui: &mut Ui) {
+        let date = self.date.get_or_insert_with(|| chrono::offset::Utc::now().date_naive());
+        ui.add(DatePickerButton::new(date));
     }
 
     fn style_editor(&mut self, ui: &mut Ui) {
@@ -1757,6 +1780,9 @@ impl TabViewer for MyContext {
             },
             "Details" => {
                 self.details_view(ui)
+            },
+            "Daily Log" => {
+                self.daily_log_view(ui)
             },
             _ => {
                 ui.label(tab.as_str());
