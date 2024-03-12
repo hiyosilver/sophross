@@ -23,7 +23,7 @@ impl Unit {
             2 => Self::Tablespoons,
             3 => Self::Pieces,
             4 => Self::Cups,
-            _ => panic!("{} is not a valid Unit!", input)
+            _ => panic!("{} is not a valid Unit!", input),
         }
     }
 }
@@ -82,9 +82,9 @@ pub struct Macronutrients {
 
 impl Macronutrients {
     fn estimate_calories(&self) -> f32 {
-        self.proteins.total_proteins() * 4.0 +
-        self.fats.total_fats() * 9.0 +
-        self.carbohydrates.net_carbs() * 4.0
+        self.proteins.total_proteins() * 4.0
+            + self.fats.total_fats() * 9.0
+            + self.carbohydrates.net_carbs() * 4.0
     }
 }
 
@@ -96,8 +96,7 @@ pub struct Proteins {
 
 impl Proteins {
     pub fn total_proteins(&self) -> f32 {
-        self.essential_amino_acids.total() +
-        self.non_essential_amino_acids.total()
+        self.essential_amino_acids.total() + self.non_essential_amino_acids.total()
     }
 }
 
@@ -116,15 +115,15 @@ pub struct EssentialAminoAcids {
 
 impl EssentialAminoAcids {
     fn total(&self) -> f32 {
-        self.histidine +
-        self.isoleucine +
-        self.leucine +
-        self.lysine +
-        self.methionine +
-        self.phenylalanine +
-        self.threonine +
-        self.tryptophan +
-        self.valine
+        self.histidine
+            + self.isoleucine
+            + self.leucine
+            + self.lysine
+            + self.methionine
+            + self.phenylalanine
+            + self.threonine
+            + self.tryptophan
+            + self.valine
     }
 }
 
@@ -145,17 +144,17 @@ pub struct NonEssentialAminoAcids {
 
 impl NonEssentialAminoAcids {
     fn total(&self) -> f32 {
-        self.alanine +
-        self.arginine +
-        self.asparagine +
-        self.aspartic_acid +
-        self.cysteine +
-        self.glutamic_acid +
-        self.glutamine +
-        self.glycine +
-        self.proline +
-        self.serine +
-        self.tyrosine
+        self.alanine
+            + self.arginine
+            + self.asparagine
+            + self.aspartic_acid
+            + self.cysteine
+            + self.glutamic_acid
+            + self.glutamine
+            + self.glycine
+            + self.proline
+            + self.serine
+            + self.tyrosine
     }
 }
 

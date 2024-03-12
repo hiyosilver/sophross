@@ -1,4 +1,4 @@
-use egui::{Color32, Stroke, Pos2, Vec2};
+use egui::{Color32, Pos2, Stroke, Vec2};
 
 pub struct PieChartSlice {
     pub fraction: f32,
@@ -6,7 +6,11 @@ pub struct PieChartSlice {
     pub tooltip: String,
 }
 
-fn generate_pie_chart(ui: &mut egui::Ui, size: Vec2, mut slices: Vec<PieChartSlice>) -> egui::Response {
+fn generate_pie_chart(
+    ui: &mut egui::Ui,
+    size: Vec2,
+    mut slices: Vec<PieChartSlice>,
+) -> egui::Response {
     let desired_size = ui.spacing().interact_size.y * size;
     let (rect, mut response) = ui.allocate_exact_size(desired_size, egui::Sense::hover());
     if response.hovered() {
@@ -28,14 +32,13 @@ fn generate_pie_chart(ui: &mut egui::Ui, size: Vec2, mut slices: Vec<PieChartSli
             actual_segments += (target_segments as f32 * slice.fraction) as u32;
         }
 
-
         let mut current_angle: f32 = 0.0;
         for slice in &slices {
             let segment_count: u32 = (target_segments as f32 * slice.fraction) as u32;
-            let segment_angle: f32 = (std::f32::consts::PI * 2.0 * slice.fraction) / segment_count as f32;
+            let segment_angle: f32 =
+                (std::f32::consts::PI * 2.0 * slice.fraction) / segment_count as f32;
 
             for seg in 0..=segment_count {
-
                 let x: f32 = rect.center().x + radius * current_angle.cos();
                 let y: f32 = rect.center().y + radius * current_angle.sin();
 
@@ -55,11 +58,16 @@ fn generate_pie_chart(ui: &mut egui::Ui, size: Vec2, mut slices: Vec<PieChartSli
                     let s1: Vec2 = r1 - r0;
                     let s2: Vec2 = b - a;
 
-                    let s = (-s1.y * (r0.x - a.x) + s1.x * (r0.y - a.y)) / (-s2.x * s1.y + s1.x * s2.y);
-                    let t = (s2.x * (r0.y - a.y) - s2.y * (r0.x - a.x)) / (-s2.x * s1.y + s1.x * s2.y);
+                    let s =
+                        (-s1.y * (r0.x - a.x) + s1.x * (r0.y - a.y)) / (-s2.x * s1.y + s1.x * s2.y);
+                    let t =
+                        (s2.x * (r0.y - a.y) - s2.y * (r0.x - a.x)) / (-s2.x * s1.y + s1.x * s2.y);
 
                     if s >= 0.0 && s <= 1.0 && t >= 0.0 && t <= 1.0 {
-                        return Some(Pos2 { x: r0.x + (t * s1.x), y: r0.y + (t * s1.y) });
+                        return Some(Pos2 {
+                            x: r0.x + (t * s1.x),
+                            y: r0.y + (t * s1.y),
+                        });
                     }
 
                     return None;
@@ -69,22 +77,26 @@ fn generate_pie_chart(ui: &mut egui::Ui, size: Vec2, mut slices: Vec<PieChartSli
                 for idx in 0..polygon.len() {
                     if let Some(_) = ray_line_intersection(
                         point,
-                        Pos2 { x: point.x + 100.0, y: point.y },
+                        Pos2 {
+                            x: point.x + 100.0,
+                            y: point.y,
+                        },
                         polygon[idx],
-                        polygon[if idx == polygon.len() - 1 {0} else {idx + 1}],
+                        polygon[if idx == polygon.len() - 1 { 0 } else { idx + 1 }],
                     ) {
                         intersection_count += 1;
                     }
                 }
                 intersection_count % 2 == 1
             }
-            
+
             let mut hovered: bool = false;
-            ui.input(|i|
+            ui.input(|i| {
                 if let Some(pointer_pos) = i.pointer.latest_pos() {
-                    hovered = pointer_pos.distance(rect.center()) <= radius && is_point_in_polygon(pointer_pos, &polygon);
+                    hovered = pointer_pos.distance(rect.center()) <= radius
+                        && is_point_in_polygon(pointer_pos, &polygon);
                 }
-            );
+            });
 
             let mut stroke: Stroke = Stroke::NONE;
             if hovered {
