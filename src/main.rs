@@ -847,221 +847,223 @@ impl MyContext {
 
     fn details_view(&mut self, ui: &mut Ui) {
         fn nutritional_info_view(ui: &mut Ui, ingredient: &Ingredient, index: usize) {
-            ui.label(format!(
-                "per {}{}:",
-                ingredient.nutritional_info[index].default_amount,
-                ingredient.nutritional_info[index].default_unit
-            ));
-            ui.label(format!(
-                "Calories: {}",
-                ingredient.nutritional_info[index].kilocalories
-            ));
-            ui.collapsing("Macronutrients", |ui| {
-                ui.allocate_ui_with_layout(
-                    ui.available_size(),
-                    egui::Layout::left_to_right(Align::Center),
-                    |ui| {
-                        ui.label(format!(
-                            "Protein: {}\nFat: {}\nCarbohydrates (net): {}",
-                            ingredient
-                                .nutritional_info[index]
-                                .macronutrients
-                                .proteins
-                                .total_proteins(),
-                            ingredient.nutritional_info[index].macronutrients.fats.total_fats(),
-                            ingredient
-                                .nutritional_info[index]
-                                .macronutrients
-                                .carbohydrates
-                                .net_carbs()
-                        ));
-                        ui.add(pie_chart::pie_chart(
-                            vec2(4.0, 4.0),
-                            vec![
-                                PieChartSlice {
-                                    fraction: 1.0 / 3.0,
-                                    color: Color32::LIGHT_GREEN,
-                                    tooltip: "Protein".to_owned(),
-                                },
-                                PieChartSlice {
-                                    fraction: 1.0 / 3.0,
-                                    color: Color32::LIGHT_BLUE,
-                                    tooltip: "Fat".to_owned(),
-                                },
-                                PieChartSlice {
-                                    fraction: 1.0 / 3.0,
-                                    color: Color32::LIGHT_RED,
-                                    tooltip: "Carbohydrates".to_owned(),
-                                },
-                            ],
-                        ));
-                    },
-                );
-            });
-            ui.collapsing("Micronutrients", |ui| {
-                ui.collapsing("Vitamins", |ui| {
-                    ui.label(format!(
-                        "Vitamin A: {}",
-                        ingredient
-                            .nutritional_info[index]
-                            .micronutrients
-                            .vitamins
-                            .vitamin_a
-                    ));
-                    ui.label(format!(
-                        "Vitamin B1: {}",
-                        ingredient
-                            .nutritional_info[index]
-                            .micronutrients
-                            .vitamins
-                            .vitamin_b1
-                    ));
-                    ui.label(format!(
-                        "Vitamin B2: {}",
-                        ingredient
-                            .nutritional_info[index]
-                            .micronutrients
-                            .vitamins
-                            .vitamin_b2
-                    ));
-                    ui.label(format!(
-                        "Vitamin B3: {}",
-                        ingredient
-                            .nutritional_info[index]
-                            .micronutrients
-                            .vitamins
-                            .vitamin_b3
-                    ));
-                    ui.label(format!(
-                        "Vitamin B5: {}",
-                        ingredient
-                            .nutritional_info[index]
-                            .micronutrients
-                            .vitamins
-                            .vitamin_b5
-                    ));
-                    ui.label(format!(
-                        "Vitamin B6: {}",
-                        ingredient
-                            .nutritional_info[index]
-                            .micronutrients
-                            .vitamins
-                            .vitamin_b6
-                    ));
-                    ui.label(format!(
-                        "Vitamin B9: {}",
-                        ingredient
-                            .nutritional_info[index]
-                            .micronutrients
-                            .vitamins
-                            .vitamin_b9
-                    ));
-                    ui.label(format!(
-                        "Vitamin B12: {}",
-                        ingredient
-                            .nutritional_info[index]
-                            .micronutrients
-                            .vitamins
-                            .vitamin_b12
-                    ));
-                    ui.label(format!(
-                        "Vitamin C: {}",
-                        ingredient
-                            .nutritional_info[index]
-                            .micronutrients
-                            .vitamins
-                            .vitamin_c
-                    ));
-                    ui.label(format!(
-                        "Vitamin D: {}",
-                        ingredient
-                            .nutritional_info[index]
-                            .micronutrients
-                            .vitamins
-                            .vitamin_d
-                    ));
-                    ui.label(format!(
-                        "Vitamin E: {}",
-                        ingredient
-                            .nutritional_info[index]
-                            .micronutrients
-                            .vitamins
-                            .vitamin_e
-                    ));
-                    ui.label(format!(
-                        "Vitamin K: {}",
-                        ingredient
-                            .nutritional_info[index]
-                            .micronutrients
-                            .vitamins
-                            .vitamin_k
-                    ));
-                    ui.label(format!(
-                        "Betaine: {}",
-                        ingredient.nutritional_info[index].micronutrients.vitamins.betaine
-                    ));
-                    ui.label(format!(
-                        "Choline: {}",
-                        ingredient.nutritional_info[index].micronutrients.vitamins.choline
-                    ));
+            egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+                ui.label(format!(
+                    "per {}{}:",
+                    ingredient.nutritional_info[index].default_amount,
+                    ingredient.nutritional_info[index].default_unit
+                ));
+                ui.label(format!(
+                    "Calories: {}",
+                    ingredient.nutritional_info[index].kilocalories
+                ));
+                ui.collapsing("Macronutrients", |ui| {
+                    ui.allocate_ui_with_layout(
+                        ui.available_size(),
+                        egui::Layout::left_to_right(Align::Center),
+                        |ui| {
+                            ui.label(format!(
+                                "Protein: {}\nFat: {}\nCarbohydrates (net): {}",
+                                ingredient
+                                    .nutritional_info[index]
+                                    .macronutrients
+                                    .proteins
+                                    .total_proteins(),
+                                ingredient.nutritional_info[index].macronutrients.fats.total_fats(),
+                                ingredient
+                                    .nutritional_info[index]
+                                    .macronutrients
+                                    .carbohydrates
+                                    .net_carbs()
+                            ));
+                            ui.add(pie_chart::pie_chart(
+                                vec2(4.0, 4.0),
+                                vec![
+                                    PieChartSlice {
+                                        fraction: 1.0 / 3.0,
+                                        color: Color32::LIGHT_GREEN,
+                                        tooltip: "Protein".to_owned(),
+                                    },
+                                    PieChartSlice {
+                                        fraction: 1.0 / 3.0,
+                                        color: Color32::LIGHT_BLUE,
+                                        tooltip: "Fat".to_owned(),
+                                    },
+                                    PieChartSlice {
+                                        fraction: 1.0 / 3.0,
+                                        color: Color32::LIGHT_RED,
+                                        tooltip: "Carbohydrates".to_owned(),
+                                    },
+                                ],
+                            ));
+                        },
+                    );
                 });
-                ui.collapsing("Minerals", |ui| {
-                    ui.label(format!(
-                        "Calcium: {}",
-                        ingredient.nutritional_info[index].micronutrients.minerals.calcium
-                    ));
-                    ui.label(format!(
-                        "Copper: {}",
-                        ingredient.nutritional_info[index].micronutrients.minerals.copper
-                    ));
-                    ui.label(format!(
-                        "Iron: {}",
-                        ingredient.nutritional_info[index].micronutrients.minerals.iron
-                    ));
-                    ui.label(format!(
-                        "Magnesium: {}",
-                        ingredient
-                            .nutritional_info[index]
-                            .micronutrients
-                            .minerals
-                            .magnesium
-                    ));
-                    ui.label(format!(
-                        "Manganese: {}",
-                        ingredient
-                            .nutritional_info[index]
-                            .micronutrients
-                            .minerals
-                            .manganese
-                    ));
-                    ui.label(format!(
-                        "Phosphorus: {}",
-                        ingredient
-                            .nutritional_info[index]
-                            .micronutrients
-                            .minerals
-                            .phosphorus
-                    ));
-                    ui.label(format!(
-                        "Potassium: {}",
-                        ingredient
-                            .nutritional_info[index]
-                            .micronutrients
-                            .minerals
-                            .potassium
-                    ));
-                    ui.label(format!(
-                        "Selenium: {}",
-                        ingredient.nutritional_info[index].micronutrients.minerals.selenium
-                    ));
-                    ui.label(format!(
-                        "Sodium: {}",
-                        ingredient.nutritional_info[index].micronutrients.minerals.sodium
-                    ));
-                    ui.label(format!(
-                        "Zinc: {}",
-                        ingredient.nutritional_info[index].micronutrients.minerals.zinc
-                    ));
+                ui.collapsing("Micronutrients", |ui| {
+                    ui.collapsing("Vitamins", |ui| {
+                        ui.label(format!(
+                            "Vitamin A: {}",
+                            ingredient
+                                .nutritional_info[index]
+                                .micronutrients
+                                .vitamins
+                                .vitamin_a
+                        ));
+                        ui.label(format!(
+                            "Vitamin B1: {}",
+                            ingredient
+                                .nutritional_info[index]
+                                .micronutrients
+                                .vitamins
+                                .vitamin_b1
+                        ));
+                        ui.label(format!(
+                            "Vitamin B2: {}",
+                            ingredient
+                                .nutritional_info[index]
+                                .micronutrients
+                                .vitamins
+                                .vitamin_b2
+                        ));
+                        ui.label(format!(
+                            "Vitamin B3: {}",
+                            ingredient
+                                .nutritional_info[index]
+                                .micronutrients
+                                .vitamins
+                                .vitamin_b3
+                        ));
+                        ui.label(format!(
+                            "Vitamin B5: {}",
+                            ingredient
+                                .nutritional_info[index]
+                                .micronutrients
+                                .vitamins
+                                .vitamin_b5
+                        ));
+                        ui.label(format!(
+                            "Vitamin B6: {}",
+                            ingredient
+                                .nutritional_info[index]
+                                .micronutrients
+                                .vitamins
+                                .vitamin_b6
+                        ));
+                        ui.label(format!(
+                            "Vitamin B9: {}",
+                            ingredient
+                                .nutritional_info[index]
+                                .micronutrients
+                                .vitamins
+                                .vitamin_b9
+                        ));
+                        ui.label(format!(
+                            "Vitamin B12: {}",
+                            ingredient
+                                .nutritional_info[index]
+                                .micronutrients
+                                .vitamins
+                                .vitamin_b12
+                        ));
+                        ui.label(format!(
+                            "Vitamin C: {}",
+                            ingredient
+                                .nutritional_info[index]
+                                .micronutrients
+                                .vitamins
+                                .vitamin_c
+                        ));
+                        ui.label(format!(
+                            "Vitamin D: {}",
+                            ingredient
+                                .nutritional_info[index]
+                                .micronutrients
+                                .vitamins
+                                .vitamin_d
+                        ));
+                        ui.label(format!(
+                            "Vitamin E: {}",
+                            ingredient
+                                .nutritional_info[index]
+                                .micronutrients
+                                .vitamins
+                                .vitamin_e
+                        ));
+                        ui.label(format!(
+                            "Vitamin K: {}",
+                            ingredient
+                                .nutritional_info[index]
+                                .micronutrients
+                                .vitamins
+                                .vitamin_k
+                        ));
+                        ui.label(format!(
+                            "Betaine: {}",
+                            ingredient.nutritional_info[index].micronutrients.vitamins.betaine
+                        ));
+                        ui.label(format!(
+                            "Choline: {}",
+                            ingredient.nutritional_info[index].micronutrients.vitamins.choline
+                        ));
+                    });
+                    ui.collapsing("Minerals", |ui| {
+                        ui.label(format!(
+                            "Calcium: {}",
+                            ingredient.nutritional_info[index].micronutrients.minerals.calcium
+                        ));
+                        ui.label(format!(
+                            "Copper: {}",
+                            ingredient.nutritional_info[index].micronutrients.minerals.copper
+                        ));
+                        ui.label(format!(
+                            "Iron: {}",
+                            ingredient.nutritional_info[index].micronutrients.minerals.iron
+                        ));
+                        ui.label(format!(
+                            "Magnesium: {}",
+                            ingredient
+                                .nutritional_info[index]
+                                .micronutrients
+                                .minerals
+                                .magnesium
+                        ));
+                        ui.label(format!(
+                            "Manganese: {}",
+                            ingredient
+                                .nutritional_info[index]
+                                .micronutrients
+                                .minerals
+                                .manganese
+                        ));
+                        ui.label(format!(
+                            "Phosphorus: {}",
+                            ingredient
+                                .nutritional_info[index]
+                                .micronutrients
+                                .minerals
+                                .phosphorus
+                        ));
+                        ui.label(format!(
+                            "Potassium: {}",
+                            ingredient
+                                .nutritional_info[index]
+                                .micronutrients
+                                .minerals
+                                .potassium
+                        ));
+                        ui.label(format!(
+                            "Selenium: {}",
+                            ingredient.nutritional_info[index].micronutrients.minerals.selenium
+                        ));
+                        ui.label(format!(
+                            "Sodium: {}",
+                            ingredient.nutritional_info[index].micronutrients.minerals.sodium
+                        ));
+                        ui.label(format!(
+                            "Zinc: {}",
+                            ingredient.nutritional_info[index].micronutrients.minerals.zinc
+                        ));
+                    });
                 });
             });
         }
@@ -1088,7 +1090,7 @@ impl MyContext {
                 }
                 ui.label(egui::RichText::new(&ingredient.name).heading().underline());
                 ui.label(egui::RichText::new(&ingredient.brand).italics());
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::RIGHT), |ui| {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                     if ui
                         .add(
                             egui::Button::image_and_text(
@@ -1121,6 +1123,25 @@ impl MyContext {
                                 }
                             }
                         }
+                    }
+                    if ui
+                        .add(
+                            egui::Button::image_and_text(
+                                egui::Image::new(egui::include_image!("../icons/edit.png"))
+                                    .tint(Color32::GRAY)
+                                    .fit_to_exact_size(vec2(16.0, 16.0))
+                                    .texture_options(TextureOptions {
+                                        magnification: TextureFilter::Nearest,
+                                        minification: TextureFilter::Nearest,
+                                        wrap_mode: TextureWrapMode::ClampToEdge,
+                                    }),
+                                "Edit",
+                            )
+                                .min_size(vec2(0.0, 24.0)),
+                        )
+                        .clicked()
+                    {
+                        println!("Edit ingredient button pressed!");
                     }
                 });
             });
