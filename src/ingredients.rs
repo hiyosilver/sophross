@@ -54,7 +54,7 @@ pub struct Ingredient {
     pub name: String,
     pub brand: String,
     pub categories: Vec<Category>,
-    pub nutritional_info: NutritionalInfo,
+    pub nutritional_info: Vec<NutritionalInfo>,
 }
 
 #[derive(Clone)]

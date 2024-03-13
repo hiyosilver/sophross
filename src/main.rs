@@ -1,8 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
+mod datepicker;
 mod ingredients;
 mod pie_chart;
 mod toggle_image;
+mod database;
 
 use ingredients::*;
 use pie_chart::{pie_chart, PieChartSlice};
@@ -15,8 +17,8 @@ use eframe::{egui, NativeOptions};
 use egui::{
     color_picker::{color_edit_button_srgba, Alpha},
     vec2, Align, CentralPanel, Color32, ComboBox, CursorIcon, Direction, Frame, ImageSource,
-    Rounding, SizeHint, Slider, Stroke, Style as BaseStyle, TextureOptions, TextureWrapMode,
-    TopBottomPanel, Ui, Vec2, ViewportBuilder, Visuals, WidgetText,
+    Layout, Rounding, SizeHint, Slider, Stroke, Style as BaseStyle, TextureOptions,
+    TextureWrapMode, TopBottomPanel, Ui, Vec2, ViewportBuilder, Visuals, WidgetText,
 };
 
 use egui_dock::{
@@ -24,11 +26,13 @@ use egui_dock::{
     TabInteractionStyle, TabViewer,
 };
 
-use egui_extras::{Column, DatePickerButton, TableBuilder};
+use datepicker::DatePickerButton;
+use egui_extras::{Column, TableBuilder};
 
 use rusqlite::{params, Connection};
 
 use chrono::NaiveDate;
+use crate::database::Database;
 
 macro_rules! labeled_widget {
     ($ui:expr, $x:expr, $l:expr) => {
@@ -77,376 +81,6 @@ fn get_icon_image_source(id: &str) -> ImageSource {
         "drop" => egui::include_image!("../icons/categories/drop.png"),
         _ => egui::include_image!("../icons/categories/placeholder.png"),
     }
-}
-
-fn setup_database() -> Connection {
-    let database_name: &str = "data.db";
-    let db_connection = Connection::open(database_name).unwrap();
-
-    db_connection
-        .execute("PRAGMA foreign_keys = ON", [])
-        .unwrap();
-
-    let ingredients_create_query = "
-        CREATE TABLE IF NOT EXISTS ingredients (
-            id INTEGER PRIMARY KEY,
-            name TEXT,
-            brand TEXT
-        );
-    ";
-    db_connection.execute(ingredients_create_query, ()).unwrap();
-
-    let categories_create_query = "
-        CREATE TABLE IF NOT EXISTS categories (
-            id INTEGER PRIMARY KEY,
-            name TEXT,
-            icon_name TEXT,
-            icon_color TEXT
-        );
-    ";
-    db_connection.execute(categories_create_query, ()).unwrap();
-
-    let ingredient_categories_create_query = "
-        CREATE TABLE IF NOT EXISTS ingredient_categories (
-            ingredient_id INTEGER,
-            category_id INTEGER,
-            FOREIGN KEY(ingredient_id) REFERENCES ingredients(id) ON DELETE CASCADE
-            FOREIGN KEY(category_id) REFERENCES categories(id) ON DELETE CASCADE
-        );
-    ";
-    db_connection
-        .execute(ingredient_categories_create_query, ())
-        .unwrap();
-
-    let nutritional_info_create_query = "
-        CREATE TABLE IF NOT EXISTS nutritional_info (
-            id INTEGER PRIMARY KEY,
-            default_amount REAL,
-            default_unit INTEGER,
-            kilocalories REAL,
-            ingredient_id INTEGER,
-            FOREIGN KEY(ingredient_id) REFERENCES ingredients(id) ON DELETE CASCADE
-        );
-    ";
-    db_connection
-        .execute(nutritional_info_create_query, ())
-        .unwrap();
-
-    let protein_sets_create_query = "
-        CREATE TABLE IF NOT EXISTS protein_sets (
-            protein_set_id INTEGER PRIMARY KEY,
-            nutrition_info_id INTEGER,
-        --essentials
-            histidine REAL,
-            isoleucine REAL,
-            leucine REAL,
-            lysine REAL,
-            methionine REAL,
-            phenylalanine REAL,
-            threonine REAL,
-            tryptophan REAL,
-            valine REAL,
-        --non-essentials
-            alanine REAL,
-            arginine REAL,
-            asparagine REAL,
-            aspartic_acid REAL,
-            cysteine REAL,
-            glutamic_acid REAL,
-            glutamine REAL,
-            glycine REAL,
-            proline REAL,
-            serine REAL,
-            tyrosine REAL,
-            FOREIGN KEY(nutrition_info_id) REFERENCES nutritional_info(id) ON DELETE CASCADE
-        );
-    ";
-    db_connection
-        .execute(protein_sets_create_query, ())
-        .unwrap();
-
-    let fat_sets_create_query = "
-        CREATE TABLE IF NOT EXISTS fat_sets (
-            fat_set_id INTEGER PRIMARY KEY,
-            nutrition_info_id INTEGER,
-            saturated REAL,
-            monounsaturated REAL,
-            polyunsaturated REAL,
-            FOREIGN KEY(nutrition_info_id) REFERENCES nutritional_info(id) ON DELETE CASCADE
-        );
-    ";
-    db_connection.execute(fat_sets_create_query, ()).unwrap();
-
-    let carbohydrate_sets_create_query = "
-        CREATE TABLE IF NOT EXISTS carbohydrate_sets (
-            carbohydrate_set_id INTEGER PRIMARY KEY,
-            nutrition_info_id INTEGER,
-            starch REAL,
-            fiber REAL,
-            sugars REAL,
-            sugar_alcohols REAL,
-            FOREIGN KEY(nutrition_info_id) REFERENCES nutritional_info(id) ON DELETE CASCADE
-        );
-    ";
-    db_connection
-        .execute(carbohydrate_sets_create_query, ())
-        .unwrap();
-
-    let vitamin_sets_create_query = "
-        CREATE TABLE IF NOT EXISTS vitamin_sets (
-            vitamin_set_id INTEGER PRIMARY KEY,
-            nutrition_info_id INTEGER,
-            vitamin_a REAL,
-            vitamin_b1 REAL,
-            vitamin_b2 REAL,
-            vitamin_b3 REAL,
-            vitamin_b5 REAL,
-            vitamin_b6 REAL,
-            vitamin_b9 REAL,
-            vitamin_b12 REAL,
-            vitamin_c REAL,
-            vitamin_d REAL,
-            vitamin_e REAL,
-            vitamin_k REAL,
-            betaine REAL,
-            choline REAL,
-            FOREIGN KEY(nutrition_info_id) REFERENCES nutritional_info(id) ON DELETE CASCADE
-        );
-    ";
-    db_connection
-        .execute(vitamin_sets_create_query, ())
-        .unwrap();
-
-    let mineral_sets_create_query = "
-        CREATE TABLE IF NOT EXISTS mineral_sets (
-            mineral_set_id INTEGER PRIMARY KEY,
-            nutrition_info_id INTEGER,
-            calcium REAL,
-            copper REAL,
-            iron REAL,
-            magnesium REAL,
-            manganese REAL,
-            phosphorus REAL,
-            potassium REAL,
-            selenium REAL,
-            sodium REAL,
-            zinc REAL,
-            FOREIGN KEY(nutrition_info_id) REFERENCES nutritional_info(id) ON DELETE CASCADE
-        );
-    ";
-    db_connection
-        .execute(mineral_sets_create_query, ())
-        .unwrap();
-
-    db_connection
-}
-
-fn get_ingredient_select_query() -> &'static str {
-    "
-    SELECT
-        ing.id, name, brand,
-        default_amount, default_unit, kilocalories,
-        --essentials
-        histidine, isoleucine, leucine, lysine, methionine, phenylalanine,
-        threonine, tryptophan, valine,
-        --non-essentials
-        alanine, arginine, asparagine, aspartic_acid, cysteine, glutamic_acid, glutamine,
-        glycine, proline, serine, tyrosine,
-        --fats
-        saturated, monounsaturated, polyunsaturated,
-        --carbohydrates
-        starch, fiber, sugars, sugar_alcohols,
-        --vitamins
-        vitamin_a, vitamin_b1, vitamin_b2, vitamin_b3, vitamin_b5, vitamin_b6, vitamin_b9,
-        vitamin_b12, vitamin_c, vitamin_d, vitamin_e, vitamin_k, betaine, choline,
-        --minerals
-        calcium, copper, iron, magnesium, manganese,
-        phosphorus, potassium, selenium, sodium, zinc
-    FROM ingredients ing
-    INNER JOIN nutritional_info ni
-        ON ing.id = ni.ingredient_id
-    INNER JOIN protein_sets ps
-        ON ni.id = ps.nutrition_info_id
-    INNER JOIN fat_sets fs
-        ON ni.id = ps.nutrition_info_id
-    INNER JOIN carbohydrate_sets cs
-        ON ni.id = ps.nutrition_info_id
-    INNER JOIN vitamin_sets vs
-        ON ni.id = ps.nutrition_info_id
-    INNER JOIN mineral_sets ms
-        ON ni.id = ps.nutrition_info_id;
-    "
-}
-
-fn get_ingredient_insert_query(ingredient: Ingredient) -> String {
-    fn category_inserts(ingredient: &Ingredient) -> String {
-        ingredient
-            .categories
-            .iter()
-            .map(|n| {
-                format!(
-                    "{}, {}",
-                    "(SELECT value FROM _variables WHERE var_name = 'ingredient_id' LIMIT 1)",
-                    n.id.to_string()
-                )
-            })
-            .collect::<Vec<String>>()
-            .join(",\n")
-    }
-
-    format!(
-        "
-        BEGIN TRANSACTION;
-
-        --PRAGMA temp_store = 2;
-
-        --errors without this for some godforsaken reason
-
-        CREATE TEMP TABLE IF NOT EXISTS _variables(var_name TEXT, value INTEGER);
-
-        INSERT INTO ingredients (
-            name, brand
-        )
-        VALUES ('{}', '{}');
-
-        INSERT INTO _variables (var_name, value) VALUES ('ingredient_id', last_insert_rowid());
-
-        INSERT INTO ingredient_categories (
-            ingredient_id, category_id
-        )
-        VALUES({});
-
-        INSERT INTO nutritional_info (
-            default_amount, default_unit, kilocalories, ingredient_id
-        )
-        VALUES ({:.1}, {}, {:.1}, (SELECT value FROM _variables WHERE var_name = 'ingredient_id' LIMIT 1));
-
-        INSERT INTO _variables (var_name, value) VALUES ('nutritional_info_id', last_insert_rowid());
-
-        INSERT INTO protein_sets (
-            nutrition_info_id,
-            --essentials
-            histidine, isoleucine, leucine, lysine, methionine, phenylalanine,
-            threonine, tryptophan, valine,
-            --non-essentials
-            alanine, arginine, asparagine, aspartic_acid, cysteine, glutamic_acid, glutamine,
-            glycine, proline, serine, tyrosine
-        )
-        VALUES ((SELECT value FROM _variables WHERE var_name = 'nutritional_info_id' LIMIT 1),
-            {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1});
-
-        INSERT INTO fat_sets (
-            nutrition_info_id,
-            saturated, monounsaturated, polyunsaturated
-        )
-        VALUES ((SELECT value FROM _variables WHERE var_name = 'nutritional_info_id' LIMIT 1),
-            {:.1}, {:.1}, {:.1});
-
-        INSERT INTO carbohydrate_sets (
-            nutrition_info_id,
-            starch, fiber, sugars, sugar_alcohols
-        )
-        VALUES ((SELECT value FROM _variables WHERE var_name = 'nutritional_info_id' LIMIT 1),
-            {:.1}, {:.1}, {:.1}, {:.1});
-
-        INSERT INTO vitamin_sets (
-            nutrition_info_id,
-            vitamin_a, vitamin_b1, vitamin_b2, vitamin_b3, vitamin_b5, vitamin_b6, vitamin_b9,
-            vitamin_b12, vitamin_c, vitamin_d, vitamin_e, vitamin_k, betaine, choline
-        )
-        VALUES ((SELECT value FROM _variables WHERE var_name = 'nutritional_info_id' LIMIT 1),
-            {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1});
-
-        INSERT INTO mineral_sets (
-            nutrition_info_id,
-            calcium, copper, iron, magnesium, manganese,
-            phosphorus, potassium, selenium, sodium, zinc
-        )
-        VALUES ((SELECT value FROM _variables WHERE var_name = 'nutritional_info_id' LIMIT 1),
-            {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1}, {:.1});
-
-        DROP TABLE IF EXISTS _variables;
-
-        COMMIT;
-        ",
-        ingredient.name,
-        ingredient.brand,
-        category_inserts(&ingredient),
-        ingredient.nutritional_info.default_amount,
-        ingredient.nutritional_info.default_unit as u8,
-        ingredient.nutritional_info.kilocalories,
-        ingredient.nutritional_info.macronutrients.proteins.essential_amino_acids.histidine,
-        ingredient.nutritional_info.macronutrients.proteins.essential_amino_acids.isoleucine,
-        ingredient.nutritional_info.macronutrients.proteins.essential_amino_acids.leucine,
-        ingredient.nutritional_info.macronutrients.proteins.essential_amino_acids.lysine,
-        ingredient.nutritional_info.macronutrients.proteins.essential_amino_acids.methionine,
-        ingredient.nutritional_info.macronutrients.proteins.essential_amino_acids.phenylalanine,
-        ingredient.nutritional_info.macronutrients.proteins.essential_amino_acids.threonine,
-        ingredient.nutritional_info.macronutrients.proteins.essential_amino_acids.tryptophan,
-        ingredient.nutritional_info.macronutrients.proteins.essential_amino_acids.valine,
-        ingredient.nutritional_info.macronutrients.proteins.non_essential_amino_acids.alanine,
-        ingredient.nutritional_info.macronutrients.proteins.non_essential_amino_acids.arginine,
-        ingredient.nutritional_info.macronutrients.proteins.non_essential_amino_acids.asparagine,
-        ingredient.nutritional_info.macronutrients.proteins.non_essential_amino_acids.aspartic_acid,
-        ingredient.nutritional_info.macronutrients.proteins.non_essential_amino_acids.cysteine,
-        ingredient.nutritional_info.macronutrients.proteins.non_essential_amino_acids.glutamic_acid,
-        ingredient.nutritional_info.macronutrients.proteins.non_essential_amino_acids.glutamine,
-        ingredient.nutritional_info.macronutrients.proteins.non_essential_amino_acids.glycine,
-        ingredient.nutritional_info.macronutrients.proteins.non_essential_amino_acids.proline,
-        ingredient.nutritional_info.macronutrients.proteins.non_essential_amino_acids.serine,
-        ingredient.nutritional_info.macronutrients.proteins.non_essential_amino_acids.tyrosine,
-        ingredient.nutritional_info.macronutrients.fats.saturated,
-        ingredient.nutritional_info.macronutrients.fats.monounsaturated,
-        ingredient.nutritional_info.macronutrients.fats.polyunsaturated,
-        ingredient.nutritional_info.macronutrients.carbohydrates.starch,
-        ingredient.nutritional_info.macronutrients.carbohydrates.fiber,
-        ingredient.nutritional_info.macronutrients.carbohydrates.sugars,
-        ingredient.nutritional_info.macronutrients.carbohydrates.sugar_alcohols,
-        ingredient.nutritional_info.micronutrients.vitamins.vitamin_a,
-        ingredient.nutritional_info.micronutrients.vitamins.vitamin_b1,
-        ingredient.nutritional_info.micronutrients.vitamins.vitamin_b2,
-        ingredient.nutritional_info.micronutrients.vitamins.vitamin_b3,
-        ingredient.nutritional_info.micronutrients.vitamins.vitamin_b5,
-        ingredient.nutritional_info.micronutrients.vitamins.vitamin_b6,
-        ingredient.nutritional_info.micronutrients.vitamins.vitamin_b9,
-        ingredient.nutritional_info.micronutrients.vitamins.vitamin_b12,
-        ingredient.nutritional_info.micronutrients.vitamins.vitamin_c,
-        ingredient.nutritional_info.micronutrients.vitamins.vitamin_d,
-        ingredient.nutritional_info.micronutrients.vitamins.vitamin_e,
-        ingredient.nutritional_info.micronutrients.vitamins.vitamin_k,
-        ingredient.nutritional_info.micronutrients.vitamins.betaine,
-        ingredient.nutritional_info.micronutrients.vitamins.choline,
-        ingredient.nutritional_info.micronutrients.minerals.calcium,
-        ingredient.nutritional_info.micronutrients.minerals.copper,
-        ingredient.nutritional_info.micronutrients.minerals.iron,
-        ingredient.nutritional_info.micronutrients.minerals.magnesium,
-        ingredient.nutritional_info.micronutrients.minerals.manganese,
-        ingredient.nutritional_info.micronutrients.minerals.phosphorus,
-        ingredient.nutritional_info.micronutrients.minerals.potassium,
-        ingredient.nutritional_info.micronutrients.minerals.selenium,
-        ingredient.nutritional_info.micronutrients.minerals.sodium,
-        ingredient.nutritional_info.micronutrients.minerals.zinc
-    )
-}
-
-fn get_ingredient_delete_query(ingredient: &Ingredient) -> String {
-    format!(
-        "
-        DELETE FROM ingredients
-        WHERE id = {}
-        ",
-        ingredient.id
-    )
-}
-
-fn get_category_delete_query(category: &Category) -> String {
-    format!(
-        "
-        DELETE FROM categories
-        WHERE id = {}
-        ",
-        category.id
-    )
 }
 
 fn main() -> eframe::Result<()> {
@@ -499,7 +133,7 @@ impl Default for MyApp {
         let [_, _] =
             dock_state
                 .main_surface_mut()
-                .split_below(b, 0.5, vec!["Hierarchy".to_owned()]);
+                .split_below(b, 0.5, vec!["Statistics".to_owned()]);
 
         let mut open_tabs = HashSet::new();
 
@@ -510,8 +144,6 @@ impl Default for MyApp {
                 }
             }
         }
-
-        let db_connection = setup_database();
 
         let context = MyContext {
             style: None,
@@ -527,11 +159,13 @@ impl Default for MyApp {
             show_tab_name_on_hover: false,
             allowed_splits: AllowedSplits::default(),
 
-            db_connection,
+            database: Database::new(),
+
             ingredients_list: Vec::new(),
             show_new_ingredient_dialog: false,
             update_ingredients: true,
             selected_ingredient: None,
+            selected_ingredient_nutrition_info: None,
 
             new_ingredient_name: String::from(""),
             new_ingredient_name_was_empty: false,
@@ -635,12 +269,13 @@ struct MyContext {
     show_window_close: bool,
     show_window_collapse: bool,
 
-    db_connection: Connection,
+    database: Database,
 
     ingredients_list: Vec<Ingredient>,
     show_new_ingredient_dialog: bool,
     update_ingredients: bool,
     selected_ingredient: Option<usize>,
+    selected_ingredient_nutrition_info: Option<usize>,
 
     new_ingredient_name: String,
     new_ingredient_name_was_empty: bool,
@@ -684,19 +319,19 @@ impl MyContext {
                         .unwrap()
                         .kilocalories = self.new_ingredient_calories;
 
-                    let _ = self
-                        .db_connection
-                        .execute_batch(&get_ingredient_insert_query(Ingredient {
-                            id: 0,
-                            name: self.new_ingredient_name.clone(),
-                            brand: self.new_ingredient_brand.clone(),
-                            categories: self
-                                .new_ingredient_selected_categories
-                                .iter()
-                                .map(|n| self.categories_list[*n].clone())
-                                .collect(),
-                            nutritional_info: self.new_ingredient_nutritional_info.clone().unwrap(),
-                        }));
+                    let new_ingredient = Ingredient {
+                        id: 0,
+                        name: self.new_ingredient_name.clone(),
+                        brand: self.new_ingredient_brand.clone(),
+                        categories: self
+                            .new_ingredient_selected_categories
+                            .iter()
+                            .map(|n| self.categories_list[*n].clone())
+                            .collect(),
+                        nutritional_info: vec![self.new_ingredient_nutritional_info.clone().unwrap()],
+                    };
+
+                    let _ = self.database.insert_ingredient(&new_ingredient);
 
                     self.update_ingredients = true;
                     cancel!();
@@ -801,7 +436,12 @@ impl MyContext {
                         }
                     }
                 });
-            if self.new_ingredient_selected_categories.len() == 0 {
+            if self.categories_list.len() == 0 {
+                ui.colored_label(
+                    Color32::from_rgb(192, 192, 16),
+                    egui::RichText::new("No categories available."),
+                );
+            } else if self.new_ingredient_selected_categories.len() == 0 {
                 ui.colored_label(
                     Color32::from_rgb(192, 192, 16),
                     egui::RichText::new("Consider adding a category."),
@@ -1001,7 +641,7 @@ impl MyContext {
                     row.col(|ui| {
                         ui.label(
                             &self.ingredients_list[row_index]
-                                .nutritional_info
+                                .nutritional_info[self.selected_ingredient_nutrition_info.unwrap_or(0)]
                                 .kilocalories
                                 .to_string(),
                         );
@@ -1009,6 +649,7 @@ impl MyContext {
 
                     if row.response().clicked() {
                         self.selected_ingredient = Some(row_index);
+                        self.selected_ingredient_nutrition_info = Some(0);
                     }
                 });
             });
@@ -1026,16 +667,16 @@ impl MyContext {
                     self.new_category_selected_icon_was_invalid = true;
                 }
                 if valid_name && valid_icon {
-                    let mut statement = self.db_connection.prepare(
-                        "INSERT INTO categories (name, icon_name, icon_color) VALUES (?1, ?2, ?3);"
-                    ).unwrap();
-                    let _ = statement.insert(params![
-                        self.new_category_name,
-                        self.new_category_icon_name,
-                        self.new_category_icon_color.to_hex()
-                    ]).unwrap();
+                    let new_category = Category {
+                        id: 0,
+                        name: self.new_category_name.clone(),
+                        icon_name: self.new_category_icon_name.clone(),
+                        icon_color: self.new_category_icon_color.clone(),
+                    };
+
+                    let _ = self.database.insert_category(&new_category);
+
                     self.update_categories = true;
-                    drop(statement);
                     cancel_category!();
                 }
             };
@@ -1116,7 +757,7 @@ impl MyContext {
         });
     }
 
-    fn categories_view(&mut self, ui: &mut Ui, category_data: Vec<Category>) {
+    fn categories_view(&mut self, ui: &mut Ui) {
         ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
             ui.add_enabled_ui(!self.show_new_category_dialog, |ui| {
                 if ui
@@ -1174,7 +815,7 @@ impl MyContext {
                 });
             })
             .body(|body| {
-                body.rows(30.0, category_data.len(), |mut row| {
+                body.rows(30.0, self.categories_list.len(), |mut row| {
                     let row_index = row.index();
 
                     row.set_selected(self.selected_category.is_some_and(|idx| idx == row_index));
@@ -1182,9 +823,9 @@ impl MyContext {
                     row.col(|ui| {
                         ui.add(
                             egui::Image::new(
-                                get_icon_image_source(&category_data[row_index].icon_name).clone(),
+                                get_icon_image_source(&self.categories_list[row_index].icon_name).clone(),
                             )
-                            .tint(category_data[row_index].icon_color)
+                            .tint(self.categories_list[row_index].icon_color)
                             .fit_to_exact_size(vec2(16.0, 16.0))
                             .texture_options(TextureOptions {
                                 magnification: TextureFilter::Nearest,
@@ -1194,7 +835,7 @@ impl MyContext {
                         );
                     });
                     row.col(|ui| {
-                        ui.label(&category_data[row_index].name);
+                        ui.label(&self.categories_list[row_index].name);
                     });
 
                     if row.response().clicked() {
@@ -1205,15 +846,15 @@ impl MyContext {
     }
 
     fn details_view(&mut self, ui: &mut Ui) {
-        fn nutritional_info_view(ui: &mut Ui, ingredient: &Ingredient) {
+        fn nutritional_info_view(ui: &mut Ui, ingredient: &Ingredient, index: usize) {
             ui.label(format!(
                 "per {}{}:",
-                ingredient.nutritional_info.default_amount,
-                ingredient.nutritional_info.default_unit
+                ingredient.nutritional_info[index].default_amount,
+                ingredient.nutritional_info[index].default_unit
             ));
             ui.label(format!(
                 "Calories: {}",
-                ingredient.nutritional_info.kilocalories
+                ingredient.nutritional_info[index].kilocalories
             ));
             ui.collapsing("Macronutrients", |ui| {
                 ui.allocate_ui_with_layout(
@@ -1223,13 +864,13 @@ impl MyContext {
                         ui.label(format!(
                             "Protein: {}\nFat: {}\nCarbohydrates (net): {}",
                             ingredient
-                                .nutritional_info
+                                .nutritional_info[index]
                                 .macronutrients
                                 .proteins
                                 .total_proteins(),
-                            ingredient.nutritional_info.macronutrients.fats.total_fats(),
+                            ingredient.nutritional_info[index].macronutrients.fats.total_fats(),
                             ingredient
-                                .nutritional_info
+                                .nutritional_info[index]
                                 .macronutrients
                                 .carbohydrates
                                 .net_carbs()
@@ -1262,7 +903,7 @@ impl MyContext {
                     ui.label(format!(
                         "Vitamin A: {}",
                         ingredient
-                            .nutritional_info
+                            .nutritional_info[index]
                             .micronutrients
                             .vitamins
                             .vitamin_a
@@ -1270,7 +911,7 @@ impl MyContext {
                     ui.label(format!(
                         "Vitamin B1: {}",
                         ingredient
-                            .nutritional_info
+                            .nutritional_info[index]
                             .micronutrients
                             .vitamins
                             .vitamin_b1
@@ -1278,7 +919,7 @@ impl MyContext {
                     ui.label(format!(
                         "Vitamin B2: {}",
                         ingredient
-                            .nutritional_info
+                            .nutritional_info[index]
                             .micronutrients
                             .vitamins
                             .vitamin_b2
@@ -1286,7 +927,7 @@ impl MyContext {
                     ui.label(format!(
                         "Vitamin B3: {}",
                         ingredient
-                            .nutritional_info
+                            .nutritional_info[index]
                             .micronutrients
                             .vitamins
                             .vitamin_b3
@@ -1294,7 +935,7 @@ impl MyContext {
                     ui.label(format!(
                         "Vitamin B5: {}",
                         ingredient
-                            .nutritional_info
+                            .nutritional_info[index]
                             .micronutrients
                             .vitamins
                             .vitamin_b5
@@ -1302,7 +943,7 @@ impl MyContext {
                     ui.label(format!(
                         "Vitamin B6: {}",
                         ingredient
-                            .nutritional_info
+                            .nutritional_info[index]
                             .micronutrients
                             .vitamins
                             .vitamin_b6
@@ -1310,7 +951,7 @@ impl MyContext {
                     ui.label(format!(
                         "Vitamin B9: {}",
                         ingredient
-                            .nutritional_info
+                            .nutritional_info[index]
                             .micronutrients
                             .vitamins
                             .vitamin_b9
@@ -1318,7 +959,7 @@ impl MyContext {
                     ui.label(format!(
                         "Vitamin B12: {}",
                         ingredient
-                            .nutritional_info
+                            .nutritional_info[index]
                             .micronutrients
                             .vitamins
                             .vitamin_b12
@@ -1326,7 +967,7 @@ impl MyContext {
                     ui.label(format!(
                         "Vitamin C: {}",
                         ingredient
-                            .nutritional_info
+                            .nutritional_info[index]
                             .micronutrients
                             .vitamins
                             .vitamin_c
@@ -1334,7 +975,7 @@ impl MyContext {
                     ui.label(format!(
                         "Vitamin D: {}",
                         ingredient
-                            .nutritional_info
+                            .nutritional_info[index]
                             .micronutrients
                             .vitamins
                             .vitamin_d
@@ -1342,7 +983,7 @@ impl MyContext {
                     ui.label(format!(
                         "Vitamin E: {}",
                         ingredient
-                            .nutritional_info
+                            .nutritional_info[index]
                             .micronutrients
                             .vitamins
                             .vitamin_e
@@ -1350,37 +991,37 @@ impl MyContext {
                     ui.label(format!(
                         "Vitamin K: {}",
                         ingredient
-                            .nutritional_info
+                            .nutritional_info[index]
                             .micronutrients
                             .vitamins
                             .vitamin_k
                     ));
                     ui.label(format!(
                         "Betaine: {}",
-                        ingredient.nutritional_info.micronutrients.vitamins.betaine
+                        ingredient.nutritional_info[index].micronutrients.vitamins.betaine
                     ));
                     ui.label(format!(
                         "Choline: {}",
-                        ingredient.nutritional_info.micronutrients.vitamins.choline
+                        ingredient.nutritional_info[index].micronutrients.vitamins.choline
                     ));
                 });
                 ui.collapsing("Minerals", |ui| {
                     ui.label(format!(
                         "Calcium: {}",
-                        ingredient.nutritional_info.micronutrients.minerals.calcium
+                        ingredient.nutritional_info[index].micronutrients.minerals.calcium
                     ));
                     ui.label(format!(
                         "Copper: {}",
-                        ingredient.nutritional_info.micronutrients.minerals.copper
+                        ingredient.nutritional_info[index].micronutrients.minerals.copper
                     ));
                     ui.label(format!(
                         "Iron: {}",
-                        ingredient.nutritional_info.micronutrients.minerals.iron
+                        ingredient.nutritional_info[index].micronutrients.minerals.iron
                     ));
                     ui.label(format!(
                         "Magnesium: {}",
                         ingredient
-                            .nutritional_info
+                            .nutritional_info[index]
                             .micronutrients
                             .minerals
                             .magnesium
@@ -1388,7 +1029,7 @@ impl MyContext {
                     ui.label(format!(
                         "Manganese: {}",
                         ingredient
-                            .nutritional_info
+                            .nutritional_info[index]
                             .micronutrients
                             .minerals
                             .manganese
@@ -1396,7 +1037,7 @@ impl MyContext {
                     ui.label(format!(
                         "Phosphorus: {}",
                         ingredient
-                            .nutritional_info
+                            .nutritional_info[index]
                             .micronutrients
                             .minerals
                             .phosphorus
@@ -1404,22 +1045,22 @@ impl MyContext {
                     ui.label(format!(
                         "Potassium: {}",
                         ingredient
-                            .nutritional_info
+                            .nutritional_info[index]
                             .micronutrients
                             .minerals
                             .potassium
                     ));
                     ui.label(format!(
                         "Selenium: {}",
-                        ingredient.nutritional_info.micronutrients.minerals.selenium
+                        ingredient.nutritional_info[index].micronutrients.minerals.selenium
                     ));
                     ui.label(format!(
                         "Sodium: {}",
-                        ingredient.nutritional_info.micronutrients.minerals.sodium
+                        ingredient.nutritional_info[index].micronutrients.minerals.sodium
                     ));
                     ui.label(format!(
                         "Zinc: {}",
-                        ingredient.nutritional_info.micronutrients.minerals.zinc
+                        ingredient.nutritional_info[index].micronutrients.minerals.zinc
                     ));
                 });
             });
@@ -1465,25 +1106,25 @@ impl MyContext {
                         )
                         .clicked()
                     {
-                        let mut delete_statement = self
-                            .db_connection
-                            .prepare(&get_ingredient_delete_query(ingredient))
-                            .unwrap();
-                        let delete_result = delete_statement.execute([]);
+                        let mut delete_result = self
+                            .database
+                            .delete_ingredient(&ingredient);
                         if let Ok(_) = delete_result {
                             self.update_ingredients = true;
                             if self.ingredients_list.len() == 1 {
                                 self.selected_ingredient = None;
+                                self.selected_ingredient_nutrition_info = None;
                             } else if let Some(selected) = self.selected_ingredient {
                                 if selected == self.ingredients_list.len() - 1 {
                                     self.selected_ingredient = Some(selected - 1);
+                                    self.selected_ingredient_nutrition_info = Some(0);
                                 }
                             }
                         }
                     }
                 });
             });
-            nutritional_info_view(ui, ingredient);
+            nutritional_info_view(ui, ingredient, self.selected_ingredient_nutrition_info.unwrap_or(0));
         } else if let Some(idx) = self.selected_category {
             let category = &self.categories_list[idx];
 
@@ -1520,11 +1161,9 @@ impl MyContext {
                         )
                         .clicked()
                     {
-                        let mut delete_statement = self
-                            .db_connection
-                            .prepare(&get_category_delete_query(category))
-                            .unwrap();
-                        let delete_result = delete_statement.execute([]);
+                        let mut delete_result = self
+                            .database
+                            .delete_category(&category);
                         if let Ok(result) = delete_result {
                             self.update_categories = true;
                             if result > 0 {
@@ -1552,7 +1191,12 @@ impl MyContext {
         let date = self
             .date
             .get_or_insert_with(|| chrono::offset::Utc::now().date_naive());
-        ui.add(DatePickerButton::new(date));
+        ui.add(
+            DatePickerButton::new(date)
+                .highlight_weekends(false)
+                .min_size(vec2(0.0, 24.0)),
+        );
+        ui.separator();
     }
 
     fn style_editor(&mut self, ui: &mut Ui) {
@@ -1904,198 +1548,33 @@ impl TabViewer for MyContext {
     }
 
     fn ui(&mut self, ui: &mut Ui, tab: &mut Self::Tab) {
-        fn get_category_data(context: &mut MyContext) -> Vec<Category> {
-            let mut statement = context
-                .db_connection
-                .prepare("SELECT id, name, icon_name, icon_color FROM categories")
-                .unwrap();
-            let categories_iter = statement
-                .query_map([], |row| {
-                    Ok(Category {
-                        id: row.get("id")?,
-                        name: row.get("name")?,
-                        icon_name: row.get("icon_name")?,
-                        icon_color: Color32::from_hex(
-                            &row.get::<&str, String>("icon_color")
-                                .expect("Could not parse hex value into color!"),
-                        )
-                        .unwrap(),
-                    })
-                })
-                .unwrap();
-            let mut data: Vec<Category> = Vec::new();
-            for category in categories_iter {
-                data.push(category.unwrap());
-            }
-
-            data
-        }
-
         match tab.as_str() {
             "Style Editor" => self.style_editor(ui),
             "Ingredients View" => {
                 self.selected_category = None;
+
                 if self.update_ingredients {
                     self.update_ingredients = false;
-                    let ingredient_data: Vec<Ingredient> = {
-                        let mut statement = self
-                            .db_connection
-                            .prepare(get_ingredient_select_query())
-                            .unwrap();
-                        let ingredients_iter = statement
-                            .query_map([], |row| {
-                                let categories: Vec<Category> = {
-                                    let sql = format!(
-                                        "
-                                        SELECT id, name, icon_name, icon_color
-                                        FROM categories c
-                                        INNER JOIN ingredient_categories ic
-                                            ON ic.category_id = c.id
-                                            AND ic.ingredient_id = {};
-                                    ",
-                                        &row.get::<usize, u32>(0).unwrap()
-                                    );
-                                    let mut category_statement =
-                                        self.db_connection.prepare(&sql).unwrap();
-                                    let categories_iter = category_statement
-                                        .query_map([], |category_row| {
-                                            Ok(Category {
-                                                id: category_row.get("id")?,
-                                                name: category_row.get("name")?,
-                                                icon_name: category_row.get("icon_name")?,
-                                                icon_color: Color32::from_hex(
-                                                    &category_row
-                                                        .get::<&str, String>("icon_color")
-                                                        .expect(
-                                                            "Could not parse hex value into color!",
-                                                        ),
-                                                )
-                                                .unwrap(),
-                                            })
-                                        })
-                                        .unwrap();
-
-                                    let mut data: Vec<Category> = Vec::new();
-                                    for category in categories_iter {
-                                        data.push(category.unwrap());
-                                    }
-
-                                    data
-                                };
-                                let nutritional_info: NutritionalInfo = {
-                                    NutritionalInfo {
-                                        default_amount: row.get("default_amount")?,
-                                        default_unit: Unit::from_uint(row.get("default_unit")?),
-                                        kilocalories: row.get("kilocalories")?,
-                                        macronutrients: Macronutrients {
-                                            proteins: Proteins {
-                                                essential_amino_acids: EssentialAminoAcids {
-                                                    histidine: row.get("histidine")?,
-                                                    isoleucine: row.get("isoleucine")?,
-                                                    leucine: row.get("leucine")?,
-                                                    lysine: row.get("lysine")?,
-                                                    methionine: row.get("methionine")?,
-                                                    phenylalanine: row.get("phenylalanine")?,
-                                                    threonine: row.get("threonine")?,
-                                                    tryptophan: row.get("tryptophan")?,
-                                                    valine: row.get("valine")?,
-                                                },
-                                                non_essential_amino_acids: NonEssentialAminoAcids {
-                                                    alanine: row.get("alanine")?,
-                                                    arginine: row.get("arginine")?,
-                                                    asparagine: row.get("asparagine")?,
-                                                    aspartic_acid: row.get("aspartic_acid")?,
-                                                    cysteine: row.get("cysteine")?,
-                                                    glutamic_acid: row.get("glutamic_acid")?,
-                                                    glutamine: row.get("glutamine")?,
-                                                    glycine: row.get("glycine")?,
-                                                    proline: row.get("proline")?,
-                                                    serine: row.get("serine")?,
-                                                    tyrosine: row.get("tyrosine")?,
-                                                },
-                                            },
-                                            fats: Fats {
-                                                saturated: row.get("saturated")?,
-                                                monounsaturated: row.get("monounsaturated")?,
-                                                polyunsaturated: row.get("polyunsaturated")?,
-                                            },
-                                            carbohydrates: Carbohydrates {
-                                                starch: row.get("starch")?,
-                                                fiber: row.get("fiber")?,
-                                                sugars: row.get("sugars")?,
-                                                sugar_alcohols: row.get("sugar_alcohols")?,
-                                            },
-                                        },
-                                        micronutrients: Micronutrients {
-                                            vitamins: Vitamins {
-                                                vitamin_a: row.get("vitamin_a")?,
-                                                vitamin_b1: row.get("vitamin_b1")?,
-                                                vitamin_b2: row.get("vitamin_b2")?,
-                                                vitamin_b3: row.get("vitamin_b3")?,
-                                                vitamin_b5: row.get("vitamin_b5")?,
-                                                vitamin_b6: row.get("vitamin_b6")?,
-                                                vitamin_b9: row.get("vitamin_b9")?,
-                                                vitamin_b12: row.get("vitamin_b12")?,
-                                                vitamin_c: row.get("vitamin_c")?,
-                                                vitamin_d: row.get("vitamin_d")?,
-                                                vitamin_e: row.get("vitamin_e")?,
-                                                vitamin_k: row.get("vitamin_k")?,
-                                                betaine: row.get("betaine")?,
-                                                choline: row.get("choline")?,
-                                            },
-                                            minerals: Minerals {
-                                                calcium: row.get("calcium")?,
-                                                copper: row.get("copper")?,
-                                                iron: row.get("iron")?,
-                                                magnesium: row.get("magnesium")?,
-                                                manganese: row.get("manganese")?,
-                                                phosphorus: row.get("phosphorus")?,
-                                                potassium: row.get("potassium")?,
-                                                selenium: row.get("selenium")?,
-                                                sodium: row.get("sodium")?,
-                                                zinc: row.get("zinc")?,
-                                            },
-                                        },
-                                    }
-                                };
-                                Ok(Ingredient {
-                                    id: row.get("id")?,
-                                    name: row.get("name")?,
-                                    brand: row.get("brand")?,
-                                    categories,
-                                    nutritional_info,
-                                })
-                            })
-                            .unwrap();
-
-                        let mut data: Vec<Ingredient> = Vec::new();
-                        for ingredient in ingredients_iter {
-                            data.push(ingredient.unwrap());
-                        }
-
-                        data
-                    };
-                    self.ingredients_list = ingredient_data;
+                    self.ingredients_list = self.database.get_ingredients();
                 }
 
                 if self.update_categories {
                     self.update_categories = false;
-                    //let categories_data: Vec<Category> = get_category_data(self);
-                    self.categories_list = get_category_data(self);
+                    self.categories_list = self.database.get_categories();
                 }
 
                 self.ingredients_view(ui);
             }
             "Categories View" => {
                 self.selected_ingredient = None;
-                if !self.update_categories {
-                    self.categories_view(ui, self.categories_list.clone())
-                } else {
+                self.selected_ingredient_nutrition_info = None;
+
+                if self.update_categories {
                     self.update_categories = false;
-                    let categories_data: Vec<Category> = get_category_data(self);
-                    self.categories_list = categories_data.clone();
-                    self.categories_view(ui, categories_data)
+                    self.categories_list = self.database.get_categories();
                 }
+
+                self.categories_view(ui);
             }
             "Details" => self.details_view(ui),
             "Daily Log" => self.daily_log_view(ui),
