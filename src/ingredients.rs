@@ -58,6 +58,13 @@ pub struct Ingredient {
 }
 
 #[derive(Clone)]
+pub struct LogEntry {
+    pub id: u32,
+    pub ingredient: StIngredientring,
+    pub fraction: f32,
+}
+
+#[derive(Clone)]
 pub struct NutritionalInfo {
     pub default_amount: f32,
     pub default_unit: Unit,

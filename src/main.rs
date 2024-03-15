@@ -69,7 +69,7 @@ macro_rules! unit_slider {
     };
 }
 
-const ICON_NAMES: [&str; 6] = ["apple", "bean", "bread", "candy", "drink", "drop"];
+const CATEGORY_ICON_NAMES: [&str; 6] = ["apple", "bean", "bread", "candy", "drink", "drop"];
 
 fn get_icon_image_source(id: &str) -> ImageSource {
     match id {
@@ -79,6 +79,8 @@ fn get_icon_image_source(id: &str) -> ImageSource {
         "candy" => egui::include_image!("../icons/categories/candy.png"),
         "drink" => egui::include_image!("../icons/categories/drink.png"),
         "drop" => egui::include_image!("../icons/categories/drop.png"),
+        "edit" => egui::include_image!("../icons/categories/placeholder.png"),
+        "delete" => egui::include_image!("../icons/delete.png"),
         _ => egui::include_image!("../icons/categories/placeholder.png"),
     }
 }
@@ -116,8 +118,8 @@ impl Default for MyApp {
     fn default() -> Self {
         let phi: f32 = (1.0 + 5.0_f32.sqrt()) / 2.0;
         let mut dock_state = DockState::new(vec![
-            "Ingredients View".to_owned(),
-            "Categories View".to_owned(),
+            "Ingredients".to_owned(),
+            "Categories".to_owned(),
             "Style Editor".to_owned(),
         ]);
         dock_state.translations.tab_context_menu.eject_button = "Undock".to_owned();
@@ -297,6 +299,10 @@ struct MyContext {
     new_category_icon_color: Color32,
     new_category_selected_icon: Option<usize>,
     new_category_selected_icon_was_invalid: bool,
+
+    log_entry_list: Vec<LogEntry>,
+    update_log_entries: bool,
+    selected_log_entry: Option<usize>,
 }
 
 impl MyContext {
@@ -714,7 +720,7 @@ impl MyContext {
             egui::Grid::new("category_icon_grid")
                 .spacing(vec2(-4.0, 0.0))
                 .show(ui, |ui| {
-                    for idx in 0..ICON_NAMES.len() {
+                    for idx in 0..CATEGORY_ICON_NAMES.len() {
                         let active: bool = {
                             if let Some(index) = self.new_category_selected_icon {
                                 idx == index
@@ -726,14 +732,14 @@ impl MyContext {
                             .add(toggle_image::toggle_image(
                                 active,
                                 false,
-                                &get_icon_image_source(ICON_NAMES[idx]),
+                                &get_icon_image_source(CATEGORY_ICON_NAMES[idx]),
                                 self.new_category_icon_color,
                                 vec2(16.0, 16.0),
                             ))
                             .changed()
                         {
                             self.new_category_selected_icon = Some(idx);
-                            self.new_category_icon_name = ICON_NAMES[idx].to_owned();
+                            self.new_category_icon_name = CATEGORY_ICON_NAMES[idx].to_owned();
                         }
                     }
                 });
@@ -1094,7 +1100,7 @@ impl MyContext {
                     if ui
                         .add(
                             egui::Button::image_and_text(
-                                egui::Image::new(egui::include_image!("../icons/delete.png"))
+                                egui::Image::new(get_icon_image_source("delete"))
                                     .tint(Color32::RED)
                                     .fit_to_exact_size(vec2(16.0, 16.0))
                                     .texture_options(TextureOptions {
@@ -1108,7 +1114,7 @@ impl MyContext {
                         )
                         .clicked()
                     {
-                        let mut delete_result = self
+                        let delete_result = self
                             .database
                             .delete_ingredient(&ingredient);
                         if let Ok(_) = delete_result {
@@ -1127,7 +1133,7 @@ impl MyContext {
                     if ui
                         .add(
                             egui::Button::image_and_text(
-                                egui::Image::new(egui::include_image!("../icons/edit.png"))
+                                egui::Image::new(get_icon_image_source("edit"))
                                     .tint(Color32::GRAY)
                                     .fit_to_exact_size(vec2(16.0, 16.0))
                                     .texture_options(TextureOptions {
@@ -1168,7 +1174,7 @@ impl MyContext {
                     if ui
                         .add(
                             egui::Button::image_and_text(
-                                egui::Image::new(egui::include_image!("../icons/delete.png"))
+                                egui::Image::new(get_icon_image_source("delete"))
                                     .tint(Color32::RED)
                                     .fit_to_exact_size(vec2(16.0, 16.0))
                                     .texture_options(TextureOptions {
@@ -1218,6 +1224,87 @@ impl MyContext {
                 .min_size(vec2(0.0, 24.0)),
         );
         ui.separator();
+        TableBuilder::new(ui)
+            .sense(egui::Sense::click())
+            .striped(true)
+            .cell_layout(
+                egui::Layout::centered_and_justified(egui::Direction::LeftToRight)
+                    .with_main_align(egui::Align::LEFT),
+            )
+            .column(Column::auto().resizable(true))
+            .columns(Column::remainder().resizable(true), 3)
+            .header(20.0, |mut header| {
+                header.col(|ui| {
+                    ui.heading("#");
+                });
+                header.col(|ui| {
+                    ui.heading("Amount");
+                });
+                header.col(|ui| {
+                    ui.heading("Name");
+                });
+                header.col(|ui| {
+                    ui.heading("Calories");
+                });
+            })
+            .body(|body| {
+                body.rows(30.0, self.ingredients_list.len(), |mut row| {
+                    let row_index = row.index();
+
+                    row.set_selected(self.selected_ingredient.is_some_and(|idx| idx == row_index));
+
+                    row.col(|ui| {
+                        ui.horizontal(|ui| {
+                            for category in &self.ingredients_list[row_index].categories {
+                                let icon_name = &category.icon_name;
+
+                                let response = ui.add(
+                                    egui::Image::new(get_icon_image_source(icon_name).clone())
+                                        .tint(category.icon_color)
+                                        .fit_to_exact_size(vec2(16.0, 16.0))
+                                        .texture_options(TextureOptions {
+                                            magnification: TextureFilter::Nearest,
+                                            minification: TextureFilter::Nearest,
+                                            wrap_mode: TextureWrapMode::ClampToEdge,
+                                        }),
+                                );
+
+                                ui.add_space(-4.0);
+
+                                //Workaround to allow for both clicking rows and showing tooltip
+                                if ui.rect_contains_pointer(response.rect) {
+                                    egui::show_tooltip(
+                                        ui.ctx(),
+                                        egui::Id::new("category_tooltip"),
+                                        |ui| {
+                                            ui.label(category.name.clone());
+                                        },
+                                    );
+                                }
+                            }
+                        });
+                    });
+                    row.col(|ui| {
+                        ui.label(&self.ingredients_list[row_index].name);
+                    });
+                    row.col(|ui| {
+                        ui.label(&self.ingredients_list[row_index].brand);
+                    });
+                    row.col(|ui| {
+                        ui.label(
+                            &self.ingredients_list[row_index]
+                                .nutritional_info[self.selected_ingredient_nutrition_info.unwrap_or(0)]
+                                .kilocalories
+                                .to_string(),
+                        );
+                    });
+
+                    if row.response().clicked() {
+                        self.selected_ingredient = Some(row_index);
+                        self.selected_ingredient_nutrition_info = Some(0);
+                    }
+                });
+            });
     }
 
     fn style_editor(&mut self, ui: &mut Ui) {
