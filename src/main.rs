@@ -79,7 +79,7 @@ fn get_icon_image_source(id: &str) -> ImageSource {
         "candy" => egui::include_image!("../icons/categories/candy.png"),
         "drink" => egui::include_image!("../icons/categories/drink.png"),
         "drop" => egui::include_image!("../icons/categories/drop.png"),
-        "edit" => egui::include_image!("../icons/categories/placeholder.png"),
+        "edit" => egui::include_image!("../icons/edit.png"),
         "delete" => egui::include_image!("../icons/delete.png"),
         _ => egui::include_image!("../icons/categories/placeholder.png"),
     }

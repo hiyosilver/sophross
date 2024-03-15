@@ -60,7 +60,7 @@ pub struct Ingredient {
 #[derive(Clone)]
 pub struct LogEntry {
     pub id: u32,
-    pub ingredient: StIngredientring,
+    pub ingredient: Ingredient,
     pub fraction: f32,
 }
 
