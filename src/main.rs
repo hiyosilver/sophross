@@ -99,6 +99,60 @@ fn main() -> eframe::Result<()> {
         ..Default::default()
     };
 
+    let _visuals = Visuals {
+        dark_mode: true,
+        override_text_color: None,
+        widgets: Default::default(),
+        selection: Default::default(),
+        hyperlink_color: Default::default(),
+        faint_bg_color: Default::default(),
+        extreme_bg_color: Default::default(),
+        code_bg_color: Default::default(),
+        warn_fg_color: Default::default(),
+        error_fg_color: Default::default(),
+        window_rounding: Default::default(),
+        window_shadow: Default::default(),
+        window_fill: Default::default(),
+        window_stroke: Default::default(),
+        window_highlight_topmost: false,
+        menu_rounding: Default::default(),
+        panel_fill: Default::default(),
+        popup_shadow: Default::default(),
+        resize_corner_size: 0.0,
+        text_cursor: Default::default(),
+        text_cursor_preview: false,
+        clip_rect_margin: 0.0,
+        button_frame: false,
+        collapsing_header_frame: false,
+        indent_has_left_vline: false,
+        striped: false,
+        slider_trailing_fill: false,
+        handle_shape: egui::style::HandleShape::Circle,
+        interact_cursor: None,
+        image_loading_spinners: false,
+        numeric_color_space: egui::style::NumericColorSpace::GammaByte,
+    };
+    
+    let _spacing = egui::style::Spacing {
+        item_spacing: Default::default(),
+        window_margin: Default::default(),
+        button_padding: Default::default(),
+        menu_margin: Default::default(),
+        indent: 0.0,
+        interact_size: Default::default(),
+        slider_width: 0.0,
+        combo_width: 0.0,
+        text_edit_width: 0.0,
+        icon_width: 0.0,
+        icon_width_inner: 0.0,
+        icon_spacing: 0.0,
+        tooltip_width: 0.0,
+        menu_width: 0.0,
+        indent_ends_with_horizontal_line: false,
+        combo_height: 0.0,
+        scroll: Default::default(),
+    };
+
     eframe::run_native(
         "SophrOSS",
         options,
@@ -496,8 +550,8 @@ impl MyContext {
                                 .tint(Color32::GRAY)
                                 .fit_to_exact_size(vec2(16.0, 16.0))
                                 .texture_options(TextureOptions {
-                                    magnification: TextureFilter::Nearest,
-                                    minification: TextureFilter::Nearest,
+                                    magnification: TextureFilter::Linear,
+                                    minification: TextureFilter::Linear,
                                     wrap_mode: TextureWrapMode::ClampToEdge,
                                 }),
                             "New ingredient",
@@ -661,7 +715,7 @@ impl MyContext {
                         ui.label(&self.ingredients_list[row_index].name);
                     });
                     row.col(|ui| {
-                        ui.label(&self.ingredients_list[row_index].brand);
+                        ui.label(egui::RichText::new(&self.ingredients_list[row_index].brand).italics());
                     });
                     row.col(|ui| {
                         ui.label(
@@ -1408,16 +1462,13 @@ impl MyContext {
                     .with_main_align(egui::Align::LEFT),
             )
             .column(Column::auto().resizable(true))
-            .columns(Column::remainder().resizable(true), 3)
+            .columns(Column::remainder().resizable(true), 2)
             .header(20.0, |mut header| {
                 header.col(|ui| {
-                    ui.heading("#");
+                    ui.heading("Name");
                 });
                 header.col(|ui| {
                     ui.heading("Amount");
-                });
-                header.col(|ui| {
-                    ui.heading("Name");
                 });
                 header.col(|ui| {
                     ui.heading("Calories");
@@ -1429,16 +1480,6 @@ impl MyContext {
 
                     row.set_selected(self.selected_log_entry.is_some_and(|idx| idx == row_index));
 
-                    row.col(|ui| {
-                        ui.label(&self.log_entry_list[row_index].fraction.to_string());
-                    });
-                    row.col(|ui| {
-                        ui.label(
-                            &self.log_entry_list[row_index].ingredient.nutritional_info[0]
-                                .default_amount
-                                .to_string(),
-                        );
-                    });
                     row.col(|ui| {
                         ui.horizontal(|ui| {
                             for category in &self.log_entry_list[row_index].ingredient.categories {
@@ -1471,6 +1512,17 @@ impl MyContext {
                             ui.label(&self.log_entry_list[row_index].ingredient.name);
                         });
                     });
+                    row.col(|ui| {
+                        ui.label(
+                            format!("{} x {} {}",
+                                    &self.log_entry_list[row_index].fraction.to_string(),
+                                    &self.log_entry_list[row_index].ingredient.nutritional_info[0]
+                                        .default_amount
+                                        .to_string(),
+                                    &self.log_entry_list[row_index].ingredient.nutritional_info[0].default_unit.to_string())
+                        );
+                    });
+
                     row.col(|ui| {
                         ui.label(
                             &self.log_entry_list[row_index].ingredient.nutritional_info
@@ -1845,6 +1897,9 @@ impl TabViewer for MyContext {
                 if self.update_ingredients {
                     self.update_ingredients = false;
                     self.ingredients_list = self.database.get_ingredients();
+
+                    //Upgrade log entries in case ingredient was deleted.
+                    self.update_log_entries = true;
                 }
 
                 if self.update_categories {
