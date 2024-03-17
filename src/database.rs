@@ -1,23 +1,29 @@
-use eframe::epaint::Color32;
-use rusqlite::{Connection, Error, Statement};
+use chrono::NaiveDate;
 use crate::ingredients::*;
+use eframe::epaint::Color32;
+use rusqlite::{Connection, Error as RusqliteError, Statement};
+use log::log;
+use std::rc::Rc;
 
 const NAME: &str = "data.db";
 
 pub struct Database {
-    db_connection: Option<Connection>,
+    db_connection: Option<Rc<Connection>>,
 }
 
 impl Database {
     pub fn new() -> Self {
-        let mut db = Database { db_connection: None };
+        let mut db = Database {
+            db_connection: None,
+        };
         db.setup_tables();
         db
     }
 
     fn start_connection(&mut self) {
         if self.db_connection.is_none() {
-            self.db_connection = Some(Connection::open(NAME).expect("Unable to establish database connection!"));
+            self.db_connection =
+                Some(Rc::new(Connection::open(NAME).expect("Unable to establish database connection!")));
             self.db_connection
                 .as_ref()
                 .unwrap()
@@ -36,8 +42,7 @@ impl Database {
                 brand TEXT
             );
         ";
-        self
-            .db_connection
+        self.db_connection
             .as_ref()
             .unwrap()
             .execute(ingredients_create_query, ())
@@ -132,8 +137,7 @@ impl Database {
                 FOREIGN KEY(nutrition_info_id) REFERENCES nutritional_info(id) ON DELETE CASCADE
             );
         ";
-        self
-            .db_connection
+        self.db_connection
             .as_ref()
             .unwrap()
             .execute(fat_sets_create_query, ())
@@ -209,31 +213,17 @@ impl Database {
         let daily_logs_create_query = "
             CREATE TABLE IF NOT EXISTS daily_logs (
                 id INTEGER PRIMARY KEY,
-                date TEXT
-            );
-        ";
-        self
-            .db_connection
-            .as_ref()
-            .unwrap()
-            .execute(daily_logs_create_query, ())
-            .expect("Failed to create table 'daily_logs'!");
-
-        let daily_logs_ingredients_create_query = "
-            CREATE TABLE IF NOT EXISTS daily_log_ingredients (
-                id INTEGER PRIMARY KEY,
+                date TEXT,
                 ingredient_id INTEGER,
-                daily_log_id INTEGER,
                 fraction REAL,
                 FOREIGN KEY(ingredient_id) REFERENCES ingredients(id) ON DELETE CASCADE
-                FOREIGN KEY(daily_log_id) REFERENCES daily_logs(id) ON DELETE CASCADE
             );
         ";
         self.db_connection
             .as_ref()
             .unwrap()
-            .execute(daily_logs_ingredients_create_query, ())
-            .expect("Failed to create table 'daily_log_ingredients'!");
+            .execute(daily_logs_create_query, ())
+            .expect("Failed to create table 'daily_logs'!");
     }
 
     pub fn insert_category(&mut self, category: &Category) {
@@ -243,14 +233,15 @@ impl Database {
             .db_connection
             .as_ref()
             .unwrap()
-            .prepare(
-                "INSERT INTO categories (name, icon_name, icon_color) VALUES (?1, ?2, ?3);"
-            ).unwrap();
-        let _ = statement.insert(rusqlite::params![
-            category.name,
-            category.icon_name,
-            category.icon_color.to_hex()
-        ]).unwrap();
+            .prepare("INSERT INTO categories (name, icon_name, icon_color) VALUES (?1, ?2, ?3);")
+            .unwrap();
+        let _ = statement
+            .insert(rusqlite::params![
+                category.name,
+                category.icon_name,
+                category.icon_color.to_hex()
+            ])
+            .unwrap();
     }
 
     pub fn get_categories(&mut self) -> Vec<Category> {
@@ -272,7 +263,7 @@ impl Database {
                         &row.get::<&str, String>("icon_color")
                             .expect("Could not parse hex value into color!"),
                     )
-                        .unwrap(),
+                    .unwrap(),
                 })
             })
             .unwrap();
@@ -284,7 +275,7 @@ impl Database {
         data
     }
 
-    pub fn delete_category(&mut self, category: &Category) -> Result<usize, rusqlite::Error> {
+    pub fn delete_category(&mut self, category: &Category) -> Result<usize, RusqliteError> {
         self.start_connection();
 
         let category_delete_query = format!(
@@ -303,7 +294,7 @@ impl Database {
         delete_statement.execute([])
     }
 
-    pub fn delete_categories(&mut self, categories: &[Category]) -> Result<usize, rusqlite::Error>  {
+    pub fn delete_categories(&mut self, categories: &[Category]) -> Result<usize, RusqliteError> {
         self.start_connection();
 
         let mut row_count: usize = 0;
@@ -311,7 +302,7 @@ impl Database {
         for category in categories {
             match self.delete_category(category) {
                 Ok(value) => row_count += value,
-                Err(error) => return Err(error)
+                Err(error) => return Err(error),
             }
         }
 
@@ -327,13 +318,16 @@ impl Database {
                 .iter()
                 .map(|n| {
                     format!(
-                        "{}, {}",
+                        "INSERT INTO ingredient_categories (
+                            ingredient_id, category_id
+                        )
+                        VALUES({}, {});",
                         "(SELECT value FROM _variables WHERE var_name = 'ingredient_id' LIMIT 1)",
                         n.id.to_string()
                     )
                 })
                 .collect::<Vec<String>>()
-                .join(",\n")
+                .join("\n")
         }
 
         let ingredient_insert_query = format!(
@@ -349,10 +343,7 @@ impl Database {
 
             INSERT INTO _variables (var_name, value) VALUES ('ingredient_id', last_insert_rowid());
 
-            INSERT INTO ingredient_categories (
-                ingredient_id, category_id
-            )
-            VALUES({});
+            {}
 
             COMMIT;
             ",
@@ -361,7 +352,7 @@ impl Database {
             category_inserts(&ingredient)
         );
 
-        self
+        let _ = self
             .db_connection
             .as_ref()
             .unwrap()
@@ -481,7 +472,7 @@ impl Database {
                 nutritional_info.micronutrients.minerals.zinc
             );
 
-            self
+            let _ = self
                 .db_connection
                 .as_ref()
                 .unwrap()
@@ -489,11 +480,183 @@ impl Database {
         }
     }
 
-    pub fn get_ingredients(&mut self) -> Vec<Ingredient> {
+    pub fn get_ingredient_by_id(&mut self, id: u32) -> Vec<Rc<Ingredient>> {
         self.start_connection();
 
-        let query =
-            "
+        let query = format!("
+            SELECT
+                ing.id, name, brand,
+                default_amount, default_unit, kilocalories,
+                --essentials
+                histidine, isoleucine, leucine, lysine, methionine, phenylalanine,
+                threonine, tryptophan, valine,
+                --non-essentials
+                alanine, arginine, asparagine, aspartic_acid, cysteine, glutamic_acid, glutamine,
+                glycine, proline, serine, tyrosine,
+                --fats
+                saturated, monounsaturated, polyunsaturated,
+                --carbohydrates
+                starch, fiber, sugars, sugar_alcohols,
+                --vitamins
+                vitamin_a, vitamin_b1, vitamin_b2, vitamin_b3, vitamin_b5, vitamin_b6, vitamin_b9,
+                vitamin_b12, vitamin_c, vitamin_d, vitamin_e, vitamin_k, betaine, choline,
+                --minerals
+                calcium, copper, iron, magnesium, manganese,
+                phosphorus, potassium, selenium, sodium, zinc
+            FROM ingredients ing
+            INNER JOIN nutritional_info ni
+                ON ing.id = ni.ingredient_id
+            INNER JOIN protein_sets ps
+                ON ni.id = ps.nutrition_info_id
+            INNER JOIN fat_sets fs
+                ON ni.id = fs.nutrition_info_id
+            INNER JOIN carbohydrate_sets cs
+                ON ni.id = cs.nutrition_info_id
+            INNER JOIN vitamin_sets vs
+                ON ni.id = vs.nutrition_info_id
+            INNER JOIN mineral_sets ms
+                ON ni.id = ms.nutrition_info_id
+            WHERE ing.id = {} LIMIT 1;
+            ", id);
+
+        let mut statement = self.db_connection.as_ref().unwrap().prepare(&query).unwrap();
+        let ingredients_iter = statement
+            .query_map([], |row| {
+                let categories: Vec<Category> = {
+                    let sql = format!(
+                        "
+                        SELECT id, name, icon_name, icon_color
+                        FROM categories c
+                        INNER JOIN ingredient_categories ic
+                            ON ic.category_id = c.id
+                            AND ic.ingredient_id = {};
+                        ",
+                        &row.get::<usize, u32>(0).unwrap()
+                    );
+                    let mut category_statement =
+                        self.db_connection.as_ref().unwrap().prepare(&sql).unwrap();
+                    let categories_iter = category_statement
+                        .query_map([], |category_row| {
+                            Ok(Category {
+                                id: category_row.get("id")?,
+                                name: category_row.get("name")?,
+                                icon_name: category_row.get("icon_name")?,
+                                icon_color: Color32::from_hex(
+                                    &category_row
+                                        .get::<&str, String>("icon_color")
+                                        .expect("Could not parse hex value into color!"),
+                                )
+                                    .unwrap(),
+                            })
+                        })
+                        .unwrap();
+
+                    let mut data: Vec<Category> = Vec::new();
+                    for category in categories_iter {
+                        data.push(category.unwrap());
+                    }
+
+                    data
+                };
+                let nutritional_info: NutritionalInfo = {
+                    NutritionalInfo {
+                        default_amount: row.get("default_amount")?,
+                        default_unit: Unit::from_uint(row.get("default_unit")?),
+                        kilocalories: row.get("kilocalories")?,
+                        macronutrients: Macronutrients {
+                            proteins: Proteins {
+                                essential_amino_acids: EssentialAminoAcids {
+                                    histidine: row.get("histidine")?,
+                                    isoleucine: row.get("isoleucine")?,
+                                    leucine: row.get("leucine")?,
+                                    lysine: row.get("lysine")?,
+                                    methionine: row.get("methionine")?,
+                                    phenylalanine: row.get("phenylalanine")?,
+                                    threonine: row.get("threonine")?,
+                                    tryptophan: row.get("tryptophan")?,
+                                    valine: row.get("valine")?,
+                                },
+                                non_essential_amino_acids: NonEssentialAminoAcids {
+                                    alanine: row.get("alanine")?,
+                                    arginine: row.get("arginine")?,
+                                    asparagine: row.get("asparagine")?,
+                                    aspartic_acid: row.get("aspartic_acid")?,
+                                    cysteine: row.get("cysteine")?,
+                                    glutamic_acid: row.get("glutamic_acid")?,
+                                    glutamine: row.get("glutamine")?,
+                                    glycine: row.get("glycine")?,
+                                    proline: row.get("proline")?,
+                                    serine: row.get("serine")?,
+                                    tyrosine: row.get("tyrosine")?,
+                                },
+                            },
+                            fats: Fats {
+                                saturated: row.get("saturated")?,
+                                monounsaturated: row.get("monounsaturated")?,
+                                polyunsaturated: row.get("polyunsaturated")?,
+                            },
+                            carbohydrates: Carbohydrates {
+                                starch: row.get("starch")?,
+                                fiber: row.get("fiber")?,
+                                sugars: row.get("sugars")?,
+                                sugar_alcohols: row.get("sugar_alcohols")?,
+                            },
+                        },
+                        micronutrients: Micronutrients {
+                            vitamins: Vitamins {
+                                vitamin_a: row.get("vitamin_a")?,
+                                vitamin_b1: row.get("vitamin_b1")?,
+                                vitamin_b2: row.get("vitamin_b2")?,
+                                vitamin_b3: row.get("vitamin_b3")?,
+                                vitamin_b5: row.get("vitamin_b5")?,
+                                vitamin_b6: row.get("vitamin_b6")?,
+                                vitamin_b9: row.get("vitamin_b9")?,
+                                vitamin_b12: row.get("vitamin_b12")?,
+                                vitamin_c: row.get("vitamin_c")?,
+                                vitamin_d: row.get("vitamin_d")?,
+                                vitamin_e: row.get("vitamin_e")?,
+                                vitamin_k: row.get("vitamin_k")?,
+                                betaine: row.get("betaine")?,
+                                choline: row.get("choline")?,
+                            },
+                            minerals: Minerals {
+                                calcium: row.get("calcium")?,
+                                copper: row.get("copper")?,
+                                iron: row.get("iron")?,
+                                magnesium: row.get("magnesium")?,
+                                manganese: row.get("manganese")?,
+                                phosphorus: row.get("phosphorus")?,
+                                potassium: row.get("potassium")?,
+                                selenium: row.get("selenium")?,
+                                sodium: row.get("sodium")?,
+                                zinc: row.get("zinc")?,
+                            },
+                        },
+                    }
+                };
+                Ok(Ingredient {
+                    id: row.get("id")?,
+                    name: row.get("name")?,
+                    brand: row.get("brand")?,
+                    categories,
+                    nutritional_info: vec![nutritional_info],
+                })
+            })
+            .unwrap();
+
+        let mut data = Vec::new();
+        for ingredient in ingredients_iter {
+            data.push(Rc::new(ingredient.unwrap()));
+            break;
+        }
+
+        data
+    }
+
+    pub fn get_ingredients(&mut self) -> Vec<Rc<Ingredient>> {
+        self.start_connection();
+
+        let query = "
             SELECT
                 ing.id, name, brand,
                 default_amount, default_unit, kilocalories,
@@ -528,12 +691,7 @@ impl Database {
                 ON ni.id = ms.nutrition_info_id;
             ";
 
-        let mut statement = self
-            .db_connection
-            .as_ref()
-            .unwrap()
-            .prepare(query)
-            .unwrap();
+        let mut statement = self.db_connection.as_ref().unwrap().prepare(query).unwrap();
         let ingredients_iter = statement
             .query_map([], |row| {
                 let categories: Vec<Category> = {
@@ -548,11 +706,7 @@ impl Database {
                         &row.get::<usize, u32>(0).unwrap()
                     );
                     let mut category_statement =
-                        self.db_connection
-                            .as_ref()
-                            .unwrap()
-                            .prepare(&sql)
-                            .unwrap();
+                        self.db_connection.as_ref().unwrap().prepare(&sql).unwrap();
                     let categories_iter = category_statement
                         .query_map([], |category_row| {
                             Ok(Category {
@@ -562,9 +716,7 @@ impl Database {
                                 icon_color: Color32::from_hex(
                                     &category_row
                                         .get::<&str, String>("icon_color")
-                                        .expect(
-                                            "Could not parse hex value into color!",
-                                        ),
+                                        .expect("Could not parse hex value into color!"),
                                 )
                                 .unwrap(),
                             })
@@ -664,15 +816,15 @@ impl Database {
             })
             .unwrap();
 
-        let mut data: Vec<Ingredient> = Vec::new();
+        let mut data: Vec<Rc<Ingredient>> = Vec::new();
         for ingredient in ingredients_iter {
-            data.push(ingredient.unwrap());
+            data.push(Rc::new(ingredient.unwrap()));
         }
 
         data
     }
 
-    pub fn delete_ingredient(&mut self, ingredient: &Ingredient) -> Result<usize, Error> {
+    pub fn delete_ingredient(&mut self, ingredient: &Ingredient) -> Result<usize, RusqliteError> {
         self.start_connection();
 
         let ingredient_delete_query = format!(
@@ -691,7 +843,7 @@ impl Database {
         delete_statement.execute([])
     }
 
-    pub fn delete_ingredients(&mut self, ingredients: &[Ingredient]) -> Result<usize, Error>  {
+    pub fn delete_ingredients(&mut self, ingredients: &[Ingredient]) -> Result<usize, RusqliteError> {
         self.start_connection();
 
         let mut row_count: usize = 0;
@@ -699,10 +851,59 @@ impl Database {
         for ingredient in ingredients {
             match self.delete_ingredient(ingredient) {
                 Ok(value) => row_count += value,
-                Err(error) => return Err(error)
+                Err(error) => return Err(error),
             }
         }
 
         Ok(row_count)
+    }
+
+    pub fn insert_log_entry(&mut self, date: &NaiveDate, log_entry: &LogEntry) {
+        self.start_connection();
+
+        let mut statement = self
+            .db_connection
+            .as_ref()
+            .unwrap()
+            .prepare("INSERT INTO daily_logs (date, ingredient_id, fraction) VALUES (?1, ?2, ?3);")
+            .unwrap();
+        let _ = statement
+            .insert(rusqlite::params![
+                date,
+                log_entry.ingredient.id,
+                log_entry.fraction
+            ])
+            .unwrap();
+    }
+
+    pub fn get_log_entries(&mut self, date: &NaiveDate) -> Vec<LogEntry> {
+        self.start_connection();
+
+        let query = format!("
+            SELECT
+                id, date, ingredient_id, fraction
+            FROM daily_logs WHERE date = '{}';
+            ", date);
+
+        let binding = self.db_connection.clone().unwrap();
+        let mut statement = binding.prepare(&query).unwrap();
+
+        let log_entries_iter = statement
+            .query_map([], |row| {
+                let ingredient: Rc<Ingredient> = self.get_ingredient_by_id(row.get("ingredient_id")?)[0].to_owned();
+                Ok(LogEntry {
+                    id: row.get("id")?,
+                    ingredient,
+                    fraction: row.get("fraction")?,
+                })
+            })
+            .unwrap();
+
+        let mut data: Vec<LogEntry> = Vec::new();
+        for log_entry in log_entries_iter {
+            data.push(log_entry.unwrap());
+        }
+
+        data
     }
 }

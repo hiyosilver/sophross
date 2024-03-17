@@ -1,4 +1,5 @@
 use rusqlite::types::{ToSql, ToSqlOutput, Value};
+use std::rc::Rc;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Unit {
@@ -57,10 +58,16 @@ pub struct Ingredient {
     pub nutritional_info: Vec<NutritionalInfo>,
 }
 
+impl PartialEq for Ingredient {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
 #[derive(Clone)]
 pub struct LogEntry {
     pub id: u32,
-    pub ingredient: Ingredient,
+    pub ingredient: Rc<Ingredient>,
     pub fraction: f32,
 }
 

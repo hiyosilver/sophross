@@ -2806,6 +2806,7 @@ dependencies = [
  "egui_dock",
  "egui_extras",
  "env_logger",
+ "log",
  "rusqlite",
 ]
 
