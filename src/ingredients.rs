@@ -71,6 +71,12 @@ pub struct LogEntry {
     pub fraction: f32,
 }
 
+impl LogEntry {
+    pub fn calculate_calories(&self, idx: usize) -> f32 {
+        self.ingredient.nutritional_info[idx].kilocalories * self.fraction
+    }
+}
+
 #[derive(Clone)]
 pub struct NutritionalInfo {
     pub default_amount: f32,

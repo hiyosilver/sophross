@@ -1275,7 +1275,7 @@ impl MyContext {
                         )
                         .clicked()
                     {
-                        let mut delete_result = self.database.delete_category(&category);
+                        let delete_result = self.database.delete_category(&category);
                         if let Ok(result) = delete_result {
                             self.update_categories = true;
                             if result > 0 {
@@ -1429,7 +1429,7 @@ impl MyContext {
                                 .texture_options(TextureOptions {
                                     magnification: TextureFilter::Nearest,
                                     minification: TextureFilter::Nearest,
-                                    wrap_mode: TextureWrapMode::ClampToEdge,
+                                    wrap_mode: TextureWrapMode::Repeat,
                                 }),
                             "New log entry",
                         )
@@ -1525,10 +1525,9 @@ impl MyContext {
 
                     row.col(|ui| {
                         ui.label(
-                            &self.log_entry_list[row_index].ingredient.nutritional_info
-                                [self.selected_log_entry_nutrition_info.unwrap_or(0)]
-                            .kilocalories
-                            .to_string(),
+                            &self.log_entry_list[row_index]
+                                .calculate_calories(self.selected_log_entry_nutrition_info.unwrap_or(0))
+                                .to_string(),
                         );
                     });
 
