@@ -1,6 +1,7 @@
 use chrono::{Datelike, NaiveDate, Weekday};
 
 use egui::{Align, Button, Color32, ComboBox, Direction, Id, Layout, RichText, Ui, Vec2};
+use std::collections::HashSet;
 use egui_extras::{Size, StripBuilder};
 
 use super::{button::DatePickerButtonState, month_data};
@@ -35,6 +36,7 @@ pub(crate) struct DatePickerPopup<'a> {
     pub calendar: bool,
     pub calendar_week: bool,
     pub highlight_weekends: bool,
+    pub data_available: HashSet<NaiveDate>,
 }
 
 impl<'a> DatePickerPopup<'a> {
@@ -353,6 +355,15 @@ impl<'a> DatePickerPopup<'a> {
                                                                     .interact(&button_response)
                                                                     .rounding,
                                                                 stroke,
+                                                            );
+                                                        }
+
+                                                        if self.data_available.contains(&day) {
+                                                            ui.painter().circle_filled(
+                                                                egui::pos2(button_response.rect.center().x - button_response.rect.width() * 0.25,
+                                                                           button_response.rect.center().y),
+                                                                2.0,
+                                                                Color32::GREEN
                                                             );
                                                         }
 

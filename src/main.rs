@@ -195,6 +195,7 @@ impl Default for MyApp {
             new_category_selected_icon_was_invalid: false,
 
             log_entry_list: Vec::new(),
+            log_entry_dates: HashSet::new(),
             show_new_log_entry_dialog: false,
             update_log_entries: true,
             selected_log_entry: None,
@@ -317,6 +318,7 @@ struct MyContext {
     new_category_selected_icon_was_invalid: bool,
 
     log_entry_list: Vec<LogEntry>,
+    log_entry_dates: HashSet<NaiveDate>,
     show_new_log_entry_dialog: bool,
     update_log_entries: bool,
     selected_log_entry: Option<usize>,
@@ -1355,11 +1357,14 @@ impl MyContext {
             .get_or_insert_with(|| chrono::offset::Utc::now().date_naive());
 
         ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
-            ui.add(
+            if ui.add(
                 DatePickerButton::new(date)
                     .highlight_weekends(false)
-                    .min_size(vec2(0.0, 24.0)),
-            );
+                    .min_size(vec2(0.0, 24.0))
+                    .with_data(&self.log_entry_dates)
+            ).changed() {
+                self.update_log_entries = true;
+            };
             ui.add_enabled_ui(!self.show_new_log_entry_dialog, |ui| {
                 if ui
                     .add(
@@ -1867,6 +1872,7 @@ impl TabViewer for MyContext {
                 if self.update_log_entries {
                     self.update_log_entries = false;
                     self.log_entry_list = self.database.get_log_entries(&self.date.unwrap());
+                    self.log_entry_dates = self.database.get_log_entry_dates();
                 }
 
                 self.daily_log_view(ui)

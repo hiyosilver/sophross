@@ -4,6 +4,8 @@ use eframe::epaint::Color32;
 use rusqlite::{Connection, Error as RusqliteError, Statement};
 use log::log;
 use std::rc::Rc;
+use std::collections::HashSet;
+use std::str::FromStr;
 
 const NAME: &str = "data.db";
 
@@ -902,6 +904,33 @@ impl Database {
         let mut data: Vec<LogEntry> = Vec::new();
         for log_entry in log_entries_iter {
             data.push(log_entry.unwrap());
+        }
+
+        data
+    }
+
+    pub fn get_log_entry_dates(&mut self) -> HashSet<NaiveDate> {
+        self.start_connection();
+
+        let query =
+            "
+            SELECT
+                date
+            FROM daily_logs;
+            ";
+
+        let binding = self.db_connection.clone().unwrap();
+        let mut statement = binding.prepare(&query).unwrap();
+
+        let log_entries_iter = statement
+            .query_map([], |row| {
+                Ok(row.get("date")?)
+            })
+            .unwrap();
+
+        let mut data: HashSet<NaiveDate> = HashSet::new();
+        for date in log_entries_iter {
+            data.insert(date.expect("Failed to parse NaiveDate!"));
         }
 
         data

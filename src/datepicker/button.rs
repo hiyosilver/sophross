@@ -1,6 +1,7 @@
 use super::popup::DatePickerPopup;
 use chrono::NaiveDate;
 use egui::{Area, Button, Frame, InnerResponse, Key, Order, RichText, Ui, Vec2, Widget};
+use std::collections::HashSet;
 
 #[derive(Default, Clone)]
 pub(crate) struct DatePickerButtonState {
@@ -18,6 +19,7 @@ pub struct DatePickerButton<'a> {
     show_icon: bool,
     highlight_weekends: bool,
     min_size: Vec2,
+    data_available: HashSet<NaiveDate>,
 }
 
 impl<'a> DatePickerButton<'a> {
@@ -32,6 +34,7 @@ impl<'a> DatePickerButton<'a> {
             show_icon: true,
             highlight_weekends: true,
             min_size: Vec2::ZERO,
+            data_available: HashSet::new(),
         }
     }
 
@@ -89,6 +92,13 @@ impl<'a> DatePickerButton<'a> {
     #[inline]
     pub fn min_size(mut self, min_size: Vec2) -> Self {
         self.min_size = min_size;
+        self
+    }
+
+    /// Set available data.
+    #[inline]
+    pub fn with_data(mut self, data: &HashSet<NaiveDate>) -> Self {
+        self.data_available = data.clone();
         self
     }
 }
@@ -157,6 +167,7 @@ impl<'a> Widget for DatePickerButton<'a> {
                                 calendar: self.calendar,
                                 calendar_week: self.calendar_week,
                                 highlight_weekends: self.highlight_weekends,
+                                data_available: self.data_available,
                             }
                             .draw(ui)
                         })
