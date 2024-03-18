@@ -550,8 +550,8 @@ impl MyContext {
                                 .tint(Color32::GRAY)
                                 .fit_to_exact_size(vec2(16.0, 16.0))
                                 .texture_options(TextureOptions {
-                                    magnification: TextureFilter::Linear,
-                                    minification: TextureFilter::Linear,
+                                    magnification: TextureFilter::Nearest,
+                                    minification: TextureFilter::Nearest,
                                     wrap_mode: TextureWrapMode::ClampToEdge,
                                 }),
                             "New ingredient",
@@ -727,8 +727,16 @@ impl MyContext {
                     });
 
                     if row.response().clicked() {
-                        self.selected_ingredient = Some(row_index);
-                        self.selected_ingredient_nutrition_info = Some(0);
+                        match self.selected_ingredient {
+                            Some(current_idx) if current_idx == row_index => {
+                                self.selected_ingredient = None;
+                                self.selected_ingredient_nutrition_info = None;
+                            },
+                            _ => {
+                                self.selected_ingredient = Some(row_index);
+                                self.selected_ingredient_nutrition_info = Some(0);
+                            },
+                        }
                     }
                 });
             });
@@ -919,7 +927,14 @@ impl MyContext {
                     });
 
                     if row.response().clicked() {
-                        self.selected_category = Some(row_index);
+                        match self.selected_category {
+                            Some(current_idx) if current_idx == row_index => {
+                                self.selected_category = None;
+                            },
+                            _ => {
+                                self.selected_category = Some(row_index);
+                            },
+                        }
                     }
                 });
             });
@@ -1477,7 +1492,6 @@ impl MyContext {
             .body(|body| {
                 body.rows(30.0, self.log_entry_list.len(), |mut row| {
                     let row_index = row.index();
-
                     row.set_selected(self.selected_log_entry.is_some_and(|idx| idx == row_index));
 
                     row.col(|ui| {
@@ -1532,8 +1546,16 @@ impl MyContext {
                     });
 
                     if row.response().clicked() {
-                        self.selected_log_entry = Some(row_index);
-                        self.selected_ingredient_nutrition_info = Some(0);
+                        match self.selected_log_entry {
+                            Some(current_idx) if current_idx == row_index => {
+                                self.selected_log_entry = None;
+                                self.selected_log_entry_nutrition_info = None;
+                            },
+                            _ => {
+                                self.selected_log_entry = Some(row_index);
+                                self.selected_log_entry_nutrition_info = Some(0);
+                            },
+                        }
                     }
                 });
             });
@@ -1921,8 +1943,6 @@ impl TabViewer for MyContext {
             }
             "Details" => self.details_view(ui),
             "Daily Log" => {
-                self.selected_log_entry = None;
-
                 if self.update_log_entries {
                     self.update_log_entries = false;
                     self.log_entry_list = self.database.get_log_entries(&self.date.unwrap());
