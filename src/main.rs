@@ -1,4 +1,4 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
+﻿#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 mod database;
 mod datepicker;
@@ -1383,7 +1383,8 @@ impl MyContext {
                 .show_ui(ui, |ui| {
                     let text_edit =
                         egui::TextEdit::singleline(&mut self.new_log_entry_ingredient_search)
-                            .lock_focus(true);
+                            .lock_focus(true)
+                            .hint_text("🔎");
                     ui.add(text_edit).request_focus();
 
                     for ingredient in &self.new_log_entry_filtered_ingredients {
