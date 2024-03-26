@@ -1,10 +1,10 @@
-use chrono::NaiveDate;
 use crate::ingredients::*;
+use chrono::NaiveDate;
 use eframe::epaint::Color32;
-use rusqlite::{Connection, Error as RusqliteError, Statement};
 use log::log;
-use std::rc::Rc;
+use rusqlite::{Connection, Error as RusqliteError, Statement};
 use std::collections::HashSet;
+use std::rc::Rc;
 use std::str::FromStr;
 
 const NAME: &str = "data.db";
@@ -24,8 +24,9 @@ impl Database {
 
     fn start_connection(&mut self) {
         if self.db_connection.is_none() {
-            self.db_connection =
-                Some(Rc::new(Connection::open(NAME).expect("Unable to establish database connection!")));
+            self.db_connection = Some(Rc::new(
+                Connection::open(NAME).expect("Unable to establish database connection!"),
+            ));
             self.db_connection
                 .as_ref()
                 .unwrap()
@@ -485,7 +486,8 @@ impl Database {
     pub fn get_ingredient_by_id(&mut self, id: u32) -> Vec<Rc<Ingredient>> {
         self.start_connection();
 
-        let query = format!("
+        let query = format!(
+            "
             SELECT
                 ing.id, name, brand,
                 default_amount, default_unit, kilocalories,
@@ -519,9 +521,16 @@ impl Database {
             INNER JOIN mineral_sets ms
                 ON ni.id = ms.nutrition_info_id
             WHERE ing.id = {} LIMIT 1;
-            ", id);
+            ",
+            id
+        );
 
-        let mut statement = self.db_connection.as_ref().unwrap().prepare(&query).unwrap();
+        let mut statement = self
+            .db_connection
+            .as_ref()
+            .unwrap()
+            .prepare(&query)
+            .unwrap();
         let ingredients_iter = statement
             .query_map([], |row| {
                 let categories: Vec<Category> = {
@@ -548,7 +557,7 @@ impl Database {
                                         .get::<&str, String>("icon_color")
                                         .expect("Could not parse hex value into color!"),
                                 )
-                                    .unwrap(),
+                                .unwrap(),
                             })
                         })
                         .unwrap();
@@ -845,7 +854,10 @@ impl Database {
         delete_statement.execute([])
     }
 
-    pub fn delete_ingredients(&mut self, ingredients: &[Ingredient]) -> Result<usize, RusqliteError> {
+    pub fn delete_ingredients(
+        &mut self,
+        ingredients: &[Ingredient],
+    ) -> Result<usize, RusqliteError> {
         self.start_connection();
 
         let mut row_count: usize = 0;
@@ -881,18 +893,22 @@ impl Database {
     pub fn get_log_entries(&mut self, date: &NaiveDate) -> Vec<LogEntry> {
         self.start_connection();
 
-        let query = format!("
+        let query = format!(
+            "
             SELECT
                 id, date, ingredient_id, fraction
             FROM daily_logs WHERE date = '{}';
-            ", date);
+            ",
+            date
+        );
 
         let binding = self.db_connection.clone().unwrap();
         let mut statement = binding.prepare(&query).unwrap();
 
         let log_entries_iter = statement
             .query_map([], |row| {
-                let ingredient: Rc<Ingredient> = self.get_ingredient_by_id(row.get("ingredient_id")?)[0].to_owned();
+                let ingredient: Rc<Ingredient> =
+                    self.get_ingredient_by_id(row.get("ingredient_id")?)[0].to_owned();
                 Ok(LogEntry {
                     id: row.get("id")?,
                     ingredient,
@@ -912,8 +928,7 @@ impl Database {
     pub fn get_log_entry_dates(&mut self) -> HashSet<NaiveDate> {
         self.start_connection();
 
-        let query =
-            "
+        let query = "
             SELECT
                 date
             FROM daily_logs;
@@ -922,11 +937,7 @@ impl Database {
         let binding = self.db_connection.clone().unwrap();
         let mut statement = binding.prepare(&query).unwrap();
 
-        let log_entries_iter = statement
-            .query_map([], |row| {
-                Ok(row.get("date")?)
-            })
-            .unwrap();
+        let log_entries_iter = statement.query_map([], |row| Ok(row.get("date")?)).unwrap();
 
         let mut data: HashSet<NaiveDate> = HashSet::new();
         for date in log_entries_iter {

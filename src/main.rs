@@ -1,4 +1,4 @@
-﻿#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 mod database;
 mod datepicker;
@@ -132,7 +132,7 @@ fn main() -> eframe::Result<()> {
         image_loading_spinners: false,
         numeric_color_space: egui::style::NumericColorSpace::GammaByte,
     };
-    
+
     let _spacing = egui::style::Spacing {
         item_spacing: Default::default(),
         window_margin: Default::default(),
@@ -715,7 +715,9 @@ impl MyContext {
                         ui.label(&self.ingredients_list[row_index].name);
                     });
                     row.col(|ui| {
-                        ui.label(egui::RichText::new(&self.ingredients_list[row_index].brand).italics());
+                        ui.label(
+                            egui::RichText::new(&self.ingredients_list[row_index].brand).italics(),
+                        );
                     });
                     row.col(|ui| {
                         ui.label(
@@ -731,11 +733,11 @@ impl MyContext {
                             Some(current_idx) if current_idx == row_index => {
                                 self.selected_ingredient = None;
                                 self.selected_ingredient_nutrition_info = None;
-                            },
+                            }
                             _ => {
                                 self.selected_ingredient = Some(row_index);
                                 self.selected_ingredient_nutrition_info = Some(0);
-                            },
+                            }
                         }
                     }
                 });
@@ -930,10 +932,10 @@ impl MyContext {
                         match self.selected_category {
                             Some(current_idx) if current_idx == row_index => {
                                 self.selected_category = None;
-                            },
+                            }
                             _ => {
                                 self.selected_category = Some(row_index);
-                            },
+                            }
                         }
                     }
                 });
@@ -1324,7 +1326,9 @@ impl MyContext {
                         fraction: self.new_log_entry_fraction,
                     };
 
-                    let _ = self.database.insert_log_entry(&self.date.unwrap(), &log_entry);
+                    let _ = self
+                        .database
+                        .insert_log_entry(&self.date.unwrap(), &log_entry);
 
                     self.update_log_entries = true;
                     cancel_log_entry!();
@@ -1356,10 +1360,10 @@ impl MyContext {
                     .speed(0.1),
             );
         });
-        if  self.new_log_entry_ingredient_search.len() > 1 &&
-            !self.new_log_entry_ingredient_search.eq_ignore_ascii_case(
-                self.new_log_entry_ingredient_previous_search.as_str(),
-            )
+        if self.new_log_entry_ingredient_search.len() > 1
+            && !self
+                .new_log_entry_ingredient_search
+                .eq_ignore_ascii_case(self.new_log_entry_ingredient_previous_search.as_str())
         {
             self.new_log_entry_ingredient_previous_search =
                 self.new_log_entry_ingredient_search.clone();
@@ -1367,7 +1371,14 @@ impl MyContext {
             self.new_log_entry_filtered_ingredients = self
                 .ingredients_list
                 .iter()
-                .filter(|&n| n.name.to_ascii_lowercase().contains(&self.new_log_entry_ingredient_search.to_ascii_lowercase()))
+                .filter(|&n| {
+                    n.name
+                        .to_ascii_lowercase()
+                        .contains(&self.new_log_entry_ingredient_search.to_ascii_lowercase())
+                        || n.brand
+                            .to_ascii_lowercase()
+                            .contains(&self.new_log_entry_ingredient_search.to_ascii_lowercase())
+                })
                 .map(|x| x.clone())
                 .collect();
         }
@@ -1375,11 +1386,13 @@ impl MyContext {
             ui.label("Ingredient: ");
             ComboBox::from_id_source("new_log_ingredient")
                 .width(128.0)
-                .selected_text(if let Some(ingredient) = &self.new_log_entry_selected_ingredient {
-                    ingredient.name.clone()
-                } else {
-                    "-".to_owned()
-                })
+                .selected_text(
+                    if let Some(ingredient) = &self.new_log_entry_selected_ingredient {
+                        ingredient.name.clone()
+                    } else {
+                        "-".to_owned()
+                    },
+                )
                 .show_ui(ui, |ui| {
                     let text_edit =
                         egui::TextEdit::singleline(&mut self.new_log_entry_ingredient_search)
@@ -1390,14 +1403,16 @@ impl MyContext {
                     for ingredient in &self.new_log_entry_filtered_ingredients {
                         ui.horizontal(|ui| {
                             for category in &ingredient.categories {
-                                ui.add(egui::Image::new(get_icon_image_source(&category.icon_name))
-                                    .tint(category.icon_color)
-                                    .fit_to_exact_size(vec2(16.0, 16.0))
-                                    .texture_options(TextureOptions {
-                                        magnification: TextureFilter::Nearest,
-                                        minification: TextureFilter::Nearest,
-                                        wrap_mode: TextureWrapMode::ClampToEdge,
-                                    }));
+                                ui.add(
+                                    egui::Image::new(get_icon_image_source(&category.icon_name))
+                                        .tint(category.icon_color)
+                                        .fit_to_exact_size(vec2(16.0, 16.0))
+                                        .texture_options(TextureOptions {
+                                            magnification: TextureFilter::Nearest,
+                                            minification: TextureFilter::Nearest,
+                                            wrap_mode: TextureWrapMode::ClampToEdge,
+                                        }),
+                                );
                             }
                             ui.selectable_value(
                                 &mut self.new_log_entry_selected_ingredient,
@@ -1427,12 +1442,16 @@ impl MyContext {
             .get_or_insert_with(|| chrono::offset::Utc::now().date_naive());
 
         ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
-            if ui.add(
-                DatePickerButton::new(date)
-                    .highlight_weekends(false)
-                    .min_size(vec2(0.0, 24.0))
-                    .with_data(&self.log_entry_dates)
-            ).changed() {
+            if ui
+                .add(
+                    DatePickerButton::new(date)
+                        .format("%d.%m.%Y")
+                        .highlight_weekends(false)
+                        .min_size(vec2(0.0, 24.0))
+                        .with_data(&self.log_entry_dates),
+                )
+                .changed()
+            {
                 self.update_log_entries = true;
             };
             ui.add_enabled_ui(!self.show_new_log_entry_dialog, |ui| {
@@ -1528,20 +1547,24 @@ impl MyContext {
                         });
                     });
                     row.col(|ui| {
-                        ui.label(
-                            format!("{} x {} {}",
-                                    &self.log_entry_list[row_index].fraction.to_string(),
-                                    &self.log_entry_list[row_index].ingredient.nutritional_info[0]
-                                        .default_amount
-                                        .to_string(),
-                                    &self.log_entry_list[row_index].ingredient.nutritional_info[0].default_unit.to_string())
-                        );
+                        ui.label(format!(
+                            "{} x {} {}",
+                            &self.log_entry_list[row_index].fraction.to_string(),
+                            &self.log_entry_list[row_index].ingredient.nutritional_info[0]
+                                .default_amount
+                                .to_string(),
+                            &self.log_entry_list[row_index].ingredient.nutritional_info[0]
+                                .default_unit
+                                .to_string()
+                        ));
                     });
 
                     row.col(|ui| {
                         ui.label(
                             &self.log_entry_list[row_index]
-                                .calculate_calories(self.selected_log_entry_nutrition_info.unwrap_or(0))
+                                .calculate_calories(
+                                    self.selected_log_entry_nutrition_info.unwrap_or(0),
+                                )
                                 .to_string(),
                         );
                     });
@@ -1551,11 +1574,11 @@ impl MyContext {
                             Some(current_idx) if current_idx == row_index => {
                                 self.selected_log_entry = None;
                                 self.selected_log_entry_nutrition_info = None;
-                            },
+                            }
                             _ => {
                                 self.selected_log_entry = Some(row_index);
                                 self.selected_log_entry_nutrition_info = Some(0);
-                            },
+                            }
                         }
                     }
                 });
@@ -1951,7 +1974,7 @@ impl TabViewer for MyContext {
                 }
 
                 self.daily_log_view(ui)
-            },
+            }
             _ => {
                 ui.label(tab.as_str());
             }

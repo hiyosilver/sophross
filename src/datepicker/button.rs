@@ -17,6 +17,7 @@ pub struct DatePickerButton<'a> {
     calendar: bool,
     calendar_week: bool,
     show_icon: bool,
+    format: String,
     highlight_weekends: bool,
     min_size: Vec2,
     data_available: HashSet<NaiveDate>,
@@ -32,6 +33,7 @@ impl<'a> DatePickerButton<'a> {
             calendar: true,
             calendar_week: true,
             show_icon: true,
+            format: "%Y-%m-%d".to_owned(),
             highlight_weekends: true,
             min_size: Vec2::ZERO,
             data_available: HashSet::new(),
@@ -81,6 +83,14 @@ impl<'a> DatePickerButton<'a> {
         self
     }
 
+    /// Change the format shown on the button. (Default: %Y-%m-%d)
+    /// See [`chrono::format::strftime`] for valid formats.
+    #[inline]
+    pub fn format(mut self, format: impl Into<String>) -> Self {
+        self.format = format.into();
+        self
+    }
+
     /// Highlight weekend days. (Default: true)
     #[inline]
     pub fn highlight_weekends(mut self, highlight_weekends: bool) -> Self {
@@ -111,9 +121,9 @@ impl<'a> Widget for DatePickerButton<'a> {
             .unwrap_or_default();
 
         let mut text = if self.show_icon {
-            RichText::new(format!("{} 📆", self.selection.format("%Y-%m-%d")))
+            RichText::new(format!("{} 📆", self.selection.format(&self.format)))
         } else {
-            RichText::new(format!("{}", self.selection.format("%Y-%m-%d")))
+            RichText::new(format!("{} 📆", self.selection.format(&self.format)))
         };
         let visuals = ui.visuals().widgets.open;
         if button_state.picker_visible {

@@ -1,8 +1,8 @@
 use chrono::{Datelike, NaiveDate, Weekday};
 
 use egui::{Align, Button, Color32, ComboBox, Direction, Id, Layout, RichText, Ui, Vec2};
-use std::collections::HashSet;
 use egui_extras::{Size, StripBuilder};
+use std::collections::HashSet;
 
 use super::{button::DatePickerButtonState, month_data};
 
@@ -360,10 +360,16 @@ impl<'a> DatePickerPopup<'a> {
 
                                                         if self.data_available.contains(&day) {
                                                             ui.painter().circle_filled(
-                                                                egui::pos2(button_response.rect.center().x - button_response.rect.width() * 0.25,
-                                                                           button_response.rect.center().y),
+                                                                egui::pos2(
+                                                                    button_response.rect.center().x
+                                                                        - button_response
+                                                                            .rect
+                                                                            .width()
+                                                                            * 0.25,
+                                                                    button_response.rect.center().y,
+                                                                ),
                                                                 2.0,
-                                                                Color32::GREEN
+                                                                Color32::GREEN,
                                                             );
                                                         }
 
